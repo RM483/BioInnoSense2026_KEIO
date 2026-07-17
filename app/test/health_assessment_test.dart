@@ -57,6 +57,28 @@ void main() {
     expect(a.level, HealthLevel.stable);
   });
 
+  test('ウィンドウ要約: 全て正常/一時的に高め/現在高め を区別する', () {
+    expect(HealthAssessment.windowSummary([m(5), m(7), m(6)]),
+        WindowSummaryKind.allStable);
+    expect(HealthAssessment.windowSummary([m(6), m(22), m(8)]),
+        WindowSummaryKind.recovered);
+    expect(HealthAssessment.windowSummary([m(14), m(8)]),
+        WindowSummaryKind.slightlyElevated);
+    expect(HealthAssessment.windowSummary([m(25), m(8)]),
+        WindowSummaryKind.elevated);
+    expect(HealthAssessment.windowSummary(const []),
+        WindowSummaryKind.none);
+  });
+
+  test('prevLevel: 正常範囲内の変動を判定できる材料を持つ', () {
+    final a = HealthAssessment.fromHistory(
+        [m(8, at: now), m(5, at: now)],
+        now: now);
+    expect(a.level, HealthLevel.stable);
+    expect(a.prevLevel, HealthLevel.stable);
+    expect(a.trend, HealthTrend.worsening); // +60%だがレベルは安定のまま
+  });
+
   test('24時間以上前の測定 → stale(再測定のおすすめ)', () {
     final fresh = HealthAssessment.fromHistory(
         [m(5, at: now.subtract(const Duration(hours: 23)))],

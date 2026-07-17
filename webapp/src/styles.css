@@ -501,11 +501,46 @@ button:disabled { cursor: default; opacity: 0.4; }
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- 最近の推移(折れ線・無数値) ---- */
+/* ---- 健康状態の変化(折れ線 + 状態ゾーン) ---- */
+.trend-wrap {
+  position: relative;
+  margin-top: 10px;
+}
+
 .trend-svg {
   display: block;
   width: 100%;
-  margin-top: 10px;
+  height: 100%;
+}
+
+.band-label {
+  position: absolute;
+  right: 2px;
+  transform: translateY(-50%);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* グラフの言葉による要約(線の意味を一文で) */
+.trend-summary {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+
+/* 状態チップ(色 + 記号 + 語) */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border-radius: 100px;
+  font-size: 11.5px;
+  font-weight: 600;
 }
 
 /* ---- 詳細(技術情報) ---- */

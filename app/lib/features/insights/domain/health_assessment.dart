@@ -32,6 +32,15 @@ enum HealthLevel {
 /// 前回との比較傾向
 enum HealthTrend { none, improving, steady, worsening }
 
+/// 直近ウィンドウ要約の種別(文言はl10n側でマップ)
+enum WindowSummaryKind {
+  none,
+  allStable,
+  recovered,
+  slightlyElevated,
+  elevated,
+}
+
 /// ホーム・結果画面に表示する評価。
 class HealthAssessment {
   const HealthAssessment({
@@ -39,11 +48,15 @@ class HealthAssessment {
     required this.trend,
     required this.latest,
     required this.isStale,
+    this.prevLevel,
   });
 
   final HealthLevel level;
   final HealthTrend trend;
   final Measurement? latest;
+
+  /// 前回測定のレベル(比較の文言を安心方向に整えるために使用)
+  final HealthLevel? prevLevel;
 
   /// 最終測定から24時間以上経過
   final bool isStale;
@@ -69,9 +82,11 @@ class HealthAssessment {
     final level = levelForPpm(latest.avgPpm);
 
     var trend = HealthTrend.none;
+    HealthLevel? prevLevel;
     if (history.length >= 2) {
       final prev = history[1].avgPpm;
       final cur = latest.avgPpm;
+      prevLevel = levelForPpm(prev);
       if (prev > 0.5) {
         final change = (cur - prev) / prev;
         if (change <= -0.2) {
@@ -89,9 +104,28 @@ class HealthAssessment {
     return HealthAssessment(
       level: level,
       trend: trend,
+      prevLevel: prevLevel,
       latest: latest,
       isStale: t.difference(latest.startedAt) >= staleAfter,
     );
+  }
+
+  /// 直近ウィンドウの言葉による要約(グラフの下に添える一文)。
+  static WindowSummaryKind windowSummary(List<Measurement> history,
+      {int window = 7}) {
+    final ppms = [for (final m in history.take(window)) m.avgPpm];
+    if (ppms.isEmpty) return WindowSummaryKind.none;
+    final latestLevel = levelForPpm(ppms.first);
+    if (latestLevel == HealthLevel.elevated) {
+      return WindowSummaryKind.elevated;
+    }
+    if (latestLevel == HealthLevel.slightlyElevated) {
+      return WindowSummaryKind.slightlyElevated;
+    }
+    final anyAbove = ppms.any((v) => v >= stableMaxPpm);
+    return anyAbove
+        ? WindowSummaryKind.recovered
+        : WindowSummaryKind.allStable;
   }
 
   static HealthLevel levelForPpm(double avgPpm) {

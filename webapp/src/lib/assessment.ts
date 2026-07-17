@@ -15,6 +15,8 @@ const STALE_AFTER_MS = 24 * 60 * 60 * 1000
 export interface Assessment {
   level: HealthLevel
   trend: HealthTrend
+  /** 前回測定のレベル(比較の文言を安心方向に整えるために使用) */
+  prevLevel: HealthLevel | null
   latest: SessionSummary | null
   isStale: boolean
 }
@@ -28,15 +30,17 @@ export function levelForPpm(avgPpm: number): HealthLevel {
 /** 新しい順の履歴から評価を作る */
 export function assess(history: SessionSummary[], now = Date.now()): Assessment {
   if (history.length === 0) {
-    return { level: 'none', trend: 'none', latest: null, isStale: false }
+    return { level: 'none', trend: 'none', prevLevel: null, latest: null, isStale: false }
   }
   const latest = history[0]
   const level = levelForPpm(latest.avgPpb / 1000)
 
   let trend: HealthTrend = 'none'
+  let prevLevel: HealthLevel | null = null
   if (history.length >= 2) {
     const prev = history[1].avgPpb / 1000
     const cur = latest.avgPpb / 1000
+    prevLevel = levelForPpm(prev)
     if (prev > 0.5) {
       const change = (cur - prev) / prev
       trend = change <= -0.2 ? 'improving' : change >= 0.2 ? 'worsening' : 'steady'
@@ -48,6 +52,7 @@ export function assess(history: SessionSummary[], now = Date.now()): Assessment 
   return {
     level,
     trend,
+    prevLevel,
     latest,
     isStale: now - new Date(latest.startedAt).getTime() >= STALE_AFTER_MS,
   }
@@ -75,18 +80,54 @@ export const levelColor: Record<HealthLevel, string> = {
   elevated: 'var(--danger)',
 }
 
-/** 前回からの変化(なければnull) */
+/**
+ * 前回からの変化(なければnull)。
+ * 医学的に問題のない変動(正常範囲内)では不安を与える表現を避け、
+ * 現在の状態と整合する言葉を選ぶ。
+ */
 export function trendLabel(a: Assessment): string | null {
+  if (a.trend === 'none') return null
+  const bothStable = a.level === 'stable' && a.prevLevel === 'stable'
+
   switch (a.trend) {
     case 'improving':
-      return '前回より改善しています'
+      // 高め→正常へ戻った時だけ「改善」を明言(正常内の低下はノイズ)
+      return a.prevLevel !== 'stable' && a.level === 'stable'
+        ? '前回より改善しています'
+        : bothStable
+          ? '安定した状態が続いています'
+          : '前回より落ち着いてきています'
     case 'worsening':
-      return '前回より少し上がっています'
+      // 正常範囲内の上振れは「変動」— 不安を与えない
+      return a.level === 'stable'
+        ? '正常範囲内でわずかに変動しています'
+        : '前回より少し上がっています'
     case 'steady':
-      return '前回と変わりありません'
+      return bothStable ? '安定した状態が続いています' : '前回と変わりありません'
     default:
       return null
   }
+}
+
+/**
+ * 直近ウィンドウ(グラフ表示分)の言葉による要約。
+ * グラフの下に添えて「線の意味」を一文で伝える。
+ */
+export function windowSummary(history: SessionSummary[], window = 7): string {
+  const ppms = history.slice(0, window).map((h) => h.avgPpb / 1000)
+  if (ppms.length === 0) return ''
+  const latestLevel = levelForPpm(ppms[0])
+  const anyAbove = ppms.some((v) => v >= STABLE_MAX_PPM)
+
+  if (latestLevel === 'elevated') {
+    return '高めの状態です。続くようなら受診をおすすめします'
+  }
+  if (latestLevel === 'slight') {
+    return '正常範囲をやや上回っています。様子を見ましょう'
+  }
+  return anyAbove
+    ? '高めの日もありましたが、いまは正常範囲に戻っています'
+    : '正常範囲内で推移しています'
 }
 
 /** ユーザーが取るべき行動(ホームで最も大切な一文) */

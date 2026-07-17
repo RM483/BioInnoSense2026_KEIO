@@ -6,7 +6,8 @@ import { useState } from 'react'
 import { Chart } from './components/Chart'
 import {
   CheckIcon,
-  ChevronIcon,
+  CheckSmallIcon,
+  ExclamationIcon,
   PawIcon,
 } from './components/icons'
 import type {
@@ -14,8 +15,9 @@ import type {
   SensorSample,
   SessionSummary,
 } from './providers/DataProvider'
-import { FLAG_WARMUP } from './providers/DataProvider'
+import { FLAG_WARMUP, H2_HIGH_PPM } from './providers/DataProvider'
 import {
+  STABLE_MAX_PPM,
   actionLabel,
   assess,
   levelColor,
@@ -24,6 +26,8 @@ import {
   levelShort,
   relativeTime,
   trendLabel,
+  windowSummary,
+  type HealthLevel,
 } from './lib/assessment'
 import { ageLabel, type DogProfile } from './lib/dogProfile'
 
@@ -58,12 +62,11 @@ export function HomeView(props: {
       {props.history.length >= 2 && (
         <section className="card" onClick={props.onOpenHistory} role="button">
           <div className="card-head">
-            <span className="label plain">最近の推移</span>
-            <span className="aside">
-              <ChevronIcon size={14} />
-            </span>
+            <span className="label plain">最近の健康状態</span>
+            <StatusChip level={a.level} />
           </div>
           <TrendLine history={props.history} />
+          <p className="trend-summary">{windowSummary(props.history)}</p>
         </section>
       )}
 
@@ -150,10 +153,11 @@ export function HistoryView({ history }: { history: SessionSummary[] }) {
         <>
           <section className="card">
             <div className="card-head">
-              <span className="label plain">最近の推移</span>
+              <span className="label plain">最近の健康状態</span>
               <span className="aside">{history.length}件</span>
             </div>
             <TrendLine history={history} tall />
+            <p className="trend-summary">{windowSummary(history, 14)}</p>
           </section>
           <section className="card">
             <div className="history-list">
@@ -416,8 +420,14 @@ export function MeasureFlow(props: {
 /* ================= 共有部品 ================= */
 
 /**
- * 最近の推移 — 直感的に「上がった/下がった」が分かる1本の折れ線。
- * 軸・数値は出さない(意味はホーム、数値は履歴・詳細)。最新点だけを強調。
+ * 健康状態の変化 — 「良くなった/変わらない/悪くなった」が一目で分かる折れ線。
+ *
+ * 意味が読めるように:
+ * - 縦軸は絶対スケール(0基準)。線の高さ自体が状態を表す
+ * - 正常範囲(安定ゾーン)を薄い緑の帯で敷く。上に「注意」「受診推奨」ゾーン
+ * - 右端にゾーン名の補助ラベル
+ * - 強調するのは現在(最新)の1点だけ — 状態色 + ハロー
+ * 数値・軸ラベルは出さない(数値の居場所は履歴・詳細)。
  */
 export function TrendLine({
   history,
@@ -427,74 +437,160 @@ export function TrendLine({
   tall?: boolean
 }) {
   const W = 640
-  const H = tall ? 110 : 72
-  const PAD = { x: 6, y: 10 }
+  const H = tall ? 132 : 96
+  const PAD = { left: 6, right: 64, top: 8, bottom: 8 } // 右はゾーンラベル用
   const items = history.slice(0, tall ? 14 : 7).reverse()
   const ppms = items.map((h) => h.avgPpb / 1000)
   if (ppms.length < 2) return null
 
-  const min = Math.min(...ppms)
-  const max = Math.max(...ppms)
-  const span = Math.max(max - min, 1) // 変化が小さくても線が死なない程度に
-  const x = (i: number) => PAD.x + (i / (ppms.length - 1)) * (W - PAD.x * 2)
+  // 絶対スケール(0基準)。全点が正常範囲なら帯が主役になる高さに、
+  // 高い日があるときだけ上方向へ広がる。
+  const dataMax = Math.max(...ppms)
+  const maxY = Math.max(STABLE_MAX_PPM * 1.35, dataMax * 1.2)
+  const x = (i: number) =>
+    PAD.left + (i / (ppms.length - 1)) * (W - PAD.left - PAD.right)
   const y = (v: number) =>
-    PAD.y + (1 - (v - min) / span) * (H - PAD.y * 2)
+    PAD.top + (1 - v / maxY) * (H - PAD.top - PAD.bottom)
 
   let d = ''
   ppms.forEach((v, i) => {
     d += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`
   })
-  const area = `${d}L${x(ppms.length - 1).toFixed(1)},${H}L${PAD.x},${H}Z`
   const lastLevel = levelForPpm(ppms[ppms.length - 1])
   const lastColor = levelColor[lastLevel]
+  const plotRight = W - PAD.right
+
+  const yStable = y(STABLE_MAX_PPM)
+  const yBottom = H - PAD.bottom
+  // 受診の目安(20ppm)ラインは、データが近づいた時だけ静かに現れる
+  const showGuide = dataMax >= STABLE_MAX_PPM * 1.2
+  const yGuide = y(H2_HIGH_PPM)
 
   return (
-    <svg
-      className="trend-svg"
-      viewBox={`0 0 ${W} ${H}`}
-      preserveAspectRatio="none"
-      style={{ height: H }}
-      role="img"
-      aria-label="最近の推移"
-    >
-      <path d={area} fill="var(--accent)" fillOpacity="0.06" />
-      <path
-        d={d}
-        fill="none"
-        stroke="var(--accent)"
-        strokeWidth="2"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* 各測定点(控えめ) */}
-      {ppms.slice(0, -1).map((v, i) => (
-        <circle
-          key={i}
-          cx={x(i)}
-          cy={y(v)}
-          r="2.2"
-          fill="var(--card)"
-          stroke="var(--accent)"
-          strokeWidth="1.4"
+    <div className="trend-wrap" style={{ height: H }}>
+      <svg
+        className="trend-svg"
+        viewBox={`0 0 ${W} ${H}`}
+        preserveAspectRatio="none"
+        role="img"
+        aria-label="最近の健康状態"
+      >
+        {/* ---- 正常範囲: ごく薄い緑の帯(これ以外の帯は敷かない) ---- */}
+        <rect
+          x={PAD.left}
+          y={yStable}
+          width={plotRight - PAD.left}
+          height={Math.max(0, yBottom - yStable)}
+          fill="var(--success)"
+          fillOpacity="0.07"
+          rx="6"
         />
-      ))}
-      {/* 最新点は状態色で強調 */}
-      <circle
-        cx={x(ppms.length - 1)}
-        cy={y(ppms[ppms.length - 1])}
-        r="7"
-        fill={lastColor}
-        fillOpacity="0.15"
-      />
-      <circle
-        cx={x(ppms.length - 1)}
-        cy={y(ppms[ppms.length - 1])}
-        r="3.4"
-        fill={lastColor}
-        stroke="var(--card)"
-        strokeWidth="1.5"
-      />
-    </svg>
+        <line
+          x1={PAD.left}
+          x2={plotRight}
+          y1={yStable}
+          y2={yStable}
+          stroke="var(--success)"
+          strokeOpacity="0.25"
+          strokeWidth="1"
+        />
+
+        {/* ---- 受診の目安(必要なときだけ) ---- */}
+        {showGuide && yGuide > PAD.top && (
+          <line
+            x1={PAD.left}
+            x2={plotRight}
+            y1={yGuide}
+            y2={yGuide}
+            stroke="var(--danger)"
+            strokeOpacity="0.35"
+            strokeWidth="1"
+            strokeDasharray="5 5"
+          />
+        )}
+
+        {/* ---- 推移線(中立色 — 色の意味は点にだけ持たせる) ---- */}
+        <path
+          d={d}
+          fill="none"
+          stroke="var(--text-secondary)"
+          strokeOpacity="0.65"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+        {ppms.slice(0, -1).map((v, i) => (
+          <circle
+            key={i}
+            cx={x(i)}
+            cy={y(v)}
+            r="2.2"
+            fill="var(--card)"
+            stroke="var(--text-secondary)"
+            strokeOpacity="0.65"
+            strokeWidth="1.4"
+          />
+        ))}
+
+        {/* ---- 現在(最新)だけを状態色で強調 ---- */}
+        <circle
+          cx={x(ppms.length - 1)}
+          cy={y(ppms[ppms.length - 1])}
+          r="8"
+          fill={lastColor}
+          fillOpacity="0.18"
+        />
+        <circle
+          cx={x(ppms.length - 1)}
+          cy={y(ppms[ppms.length - 1])}
+          r="3.8"
+          fill={lastColor}
+          stroke="var(--card)"
+          strokeWidth="1.5"
+        />
+      </svg>
+
+      {/* ---- ラベル(HTMLオーバーレイ: 拡縮で歪まない) ---- */}
+      <span
+        className="band-label"
+        style={{
+          top: `${((yStable + yBottom) / 2 / H) * 100}%`,
+          color: 'var(--success)',
+        }}
+      >
+        正常範囲
+      </span>
+      {showGuide && yGuide > PAD.top + 8 && (
+        <span
+          className="band-label"
+          style={{ top: `${(yGuide / H) * 100}%`, color: 'var(--danger)' }}
+        >
+          受診の目安
+        </span>
+      )}
+    </div>
+  )
+}
+
+/** 状態チップ — 色 + 記号 + 語 の三重で伝える(色覚に依存しない) */
+export function StatusChip({ level }: { level: HealthLevel }) {
+  if (level === 'none') return null
+  const color = levelColor[level]
+  return (
+    <span
+      className="chip"
+      style={{
+        color,
+        background: `color-mix(in srgb, ${color} 10%, transparent)`,
+      }}
+    >
+      {level === 'stable' ? (
+        <CheckSmallIcon size={11} />
+      ) : (
+        <ExclamationIcon size={11} />
+      )}
+      {levelShort[level]}
+    </span>
   )
 }
 

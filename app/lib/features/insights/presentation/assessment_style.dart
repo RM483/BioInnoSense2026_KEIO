@@ -38,13 +38,40 @@ extension HealthLevelStyle on HealthLevel {
       };
 }
 
-/// 前回からの変化(なければnull) — ホームの2行目
-String? assessmentTrendLabel(HealthAssessment a, AppLocalizations l10n) =>
-    switch (a.trend) {
-      HealthTrend.improving => l10n.trendImproving,
-      HealthTrend.worsening => l10n.trendWorsening,
-      HealthTrend.steady => l10n.trendSteady,
-      HealthTrend.none => null,
+/// 前回からの変化(なければnull) — ホームの2行目。
+/// 医学的に問題のない変動(正常範囲内)では不安を与える表現を避ける。
+String? assessmentTrendLabel(HealthAssessment a, AppLocalizations l10n) {
+  if (a.trend == HealthTrend.none) return null;
+  final bothStable = a.level == HealthLevel.stable &&
+      a.prevLevel == HealthLevel.stable;
+
+  return switch (a.trend) {
+    HealthTrend.improving =>
+      // 高め→正常へ戻った時だけ「改善」を明言(正常内の低下はノイズ)
+      (a.prevLevel != HealthLevel.stable && a.level == HealthLevel.stable)
+          ? l10n.trendImproving
+          : bothStable
+              ? l10n.trendStableSteady
+              : l10n.trendCalming,
+    HealthTrend.worsening =>
+      // 正常範囲内の上振れは「変動」— 不安を与えない
+      a.level == HealthLevel.stable
+          ? l10n.trendStableFluctuation
+          : l10n.trendWorsening,
+    HealthTrend.steady =>
+      bothStable ? l10n.trendStableSteady : l10n.trendSteady,
+    HealthTrend.none => null,
+  };
+}
+
+/// グラフの言葉による要約(線の意味を一文で)
+String windowSummaryText(WindowSummaryKind kind, AppLocalizations l10n) =>
+    switch (kind) {
+      WindowSummaryKind.none => '',
+      WindowSummaryKind.allStable => l10n.summaryAllStable,
+      WindowSummaryKind.recovered => l10n.summaryRecovered,
+      WindowSummaryKind.slightlyElevated => l10n.summarySlightlyElevated,
+      WindowSummaryKind.elevated => l10n.summaryElevated,
     };
 
 /// ユーザーが取るべき行動 — ホームで最も大切な一文

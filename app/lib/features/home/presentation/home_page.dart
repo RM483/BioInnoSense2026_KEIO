@@ -9,6 +9,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/constants/h2.dart';
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
@@ -182,8 +183,8 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-/// 最近の推移 — 直感的に「上がった/下がった」が分かる1本の折れ線。
-/// 軸・数値は出さない(数値の居場所は履歴・詳細)。最新点だけ状態色で強調。
+/// 最近の健康状態 — 「良い/変わらない/心配」が一目で分かるグラフ。
+/// 正常範囲を薄緑の帯で示し、強調は現在の1点だけ。下に言葉の要約を添える。
 class _TrendCard extends StatelessWidget {
   const _TrendCard({required this.recent, required this.l10n});
 
@@ -195,6 +196,9 @@ class _TrendCard extends StatelessWidget {
     final p = context.palette;
     final items = recent.take(7).toList().reversed.toList(); // 古い→新しい
     final values = [for (final m in items) m.avgPpm];
+    final level = HealthAssessment.levelForPpm(values.last);
+    final summary = windowSummaryText(
+        HealthAssessment.windowSummary(recent), l10n);
 
     return AppCard(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
@@ -206,27 +210,44 @@ class _TrendCard extends StatelessWidget {
             children: [
               Expanded(
                 child: Text(
-                  l10n.recentTrend.toUpperCase(),
-                  style: AppText.overline.copyWith(color: p.textTertiary),
+                  l10n.healthTrendTitle,
+                  style: AppText.bodyMedium.copyWith(
+                      color: p.textPrimary, fontWeight: FontWeight.w600),
                 ),
               ),
-              Icon(Icons.chevron_right, size: 16, color: p.textTertiary),
+              // 状態チップ: 色 + 記号 + 語(色覚に依存しない)
+              StatusPill(
+                label: level.shortLabel(l10n),
+                color: level.color(p),
+                softColor: level.softColor(p),
+                dot: false,
+              ),
             ],
           ),
           const SizedBox(height: 14),
           SizedBox(
-            height: 64,
+            height: 88,
             width: double.infinity,
             child: CustomPaint(
               painter: _TrendLinePainter(
                 values: values,
-                lineColor: p.accent,
-                fillColor: p.accent.withOpacity(0.06),
+                lineColor: p.textSecondary.withOpacity(0.65),
+                normalBand: p.success,
+                guideColor: p.danger,
                 pointFill: p.card,
-                lastColor: HealthAssessment.levelForPpm(values.last)
-                    .color(p),
+                lastColor: level.color(p),
+                normalLabel: l10n.normalRangeLabel,
+                guideLabel: l10n.consultGuideLabel,
+                labelStyle:
+                    AppText.caption.copyWith(fontSize: 10.5),
               ),
             ),
+          ),
+          const SizedBox(height: 12),
+          Text(
+            summary,
+            style: AppText.caption
+                .copyWith(color: p.textSecondary, height: 1.5),
           ),
         ],
       ),
@@ -234,50 +255,97 @@ class _TrendCard extends StatelessWidget {
   }
 }
 
-/// 軸なしのミニ折れ線(各点は控えめ、最新点のみ状態色でハロー付き)。
+/// 意味の読めるミニ折れ線:
+/// - 縦軸は絶対スケール(0基準) — 線の高さ自体が状態を表す
+/// - 正常範囲(〜10ppm)だけを薄緑の帯 + ラベルで示す
+/// - 受診の目安(20ppm)はデータが近づいた時だけ点線で現れる
+/// - 線は中立色、強調は現在(最新)の1点のみ
 class _TrendLinePainter extends CustomPainter {
   _TrendLinePainter({
     required this.values,
     required this.lineColor,
-    required this.fillColor,
+    required this.normalBand,
+    required this.guideColor,
     required this.pointFill,
     required this.lastColor,
+    required this.normalLabel,
+    required this.guideLabel,
+    required this.labelStyle,
   });
 
   final List<double> values;
   final Color lineColor;
-  final Color fillColor;
+  final Color normalBand;
+  final Color guideColor;
   final Color pointFill;
   final Color lastColor;
+  final String normalLabel;
+  final String guideLabel;
+  final TextStyle labelStyle;
+
+  static const _stable = HealthAssessment.stableMaxPpm; // 10
+  static const _guide = H2.highPpm; // 20
 
   @override
   void paint(Canvas canvas, Size size) {
     if (values.length < 2) return;
-    final min = values.reduce((a, b) => a < b ? a : b);
-    final max = values.reduce((a, b) => a > b ? a : b);
-    final span = (max - min) < 1 ? 1.0 : (max - min);
-    const padY = 10.0;
-    const padX = 6.0;
+    final dataMax = values.reduce((a, b) => a > b ? a : b);
+    final maxY = [_stable * 1.35, dataMax * 1.2]
+        .reduce((a, b) => a > b ? a : b);
+    const padTop = 8.0;
+    const padBottom = 8.0;
+    const padLeft = 6.0;
+    const padRight = 64.0; // ラベル領域
 
+    final plotRight = size.width - padRight;
+    double yOf(double v) =>
+        padTop + (1 - v / maxY) * (size.height - padTop - padBottom);
     Offset at(int i) => Offset(
-          padX + i / (values.length - 1) * (size.width - padX * 2),
-          padY +
-              (1 - (values[i] - min) / span) * (size.height - padY * 2),
+          padLeft + i / (values.length - 1) * (plotRight - padLeft),
+          yOf(values[i]),
         );
 
+    final yStable = yOf(_stable);
+    final yBottom = size.height - padBottom;
+
+    // ---- 正常範囲の帯(薄緑) + 上端ライン ----
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(
+        Rect.fromLTRB(padLeft, yStable, plotRight, yBottom),
+        const Radius.circular(6),
+      ),
+      Paint()..color = normalBand.withOpacity(0.07),
+    );
+    canvas.drawLine(
+      Offset(padLeft, yStable),
+      Offset(plotRight, yStable),
+      Paint()
+        ..color = normalBand.withOpacity(0.25)
+        ..strokeWidth = 1,
+    );
+    _label(canvas, normalLabel, normalBand,
+        Offset(plotRight + 8, (yStable + yBottom) / 2));
+
+    // ---- 受診の目安(必要なときだけ点線) ----
+    final showGuide = dataMax >= _stable * 1.2;
+    if (showGuide) {
+      final yG = yOf(_guide);
+      if (yG > padTop) {
+        final dash = Paint()
+          ..color = guideColor.withOpacity(0.35)
+          ..strokeWidth = 1;
+        for (var x = padLeft; x < plotRight; x += 10) {
+          canvas.drawLine(Offset(x, yG), Offset(x + 5, yG), dash);
+        }
+        _label(canvas, guideLabel, guideColor, Offset(plotRight + 8, yG));
+      }
+    }
+
+    // ---- 推移線(中立色) ----
     final path = Path()..moveTo(at(0).dx, at(0).dy);
     for (var i = 1; i < values.length; i++) {
       path.lineTo(at(i).dx, at(i).dy);
     }
-
-    // 薄い面
-    final area = Path.from(path)
-      ..lineTo(at(values.length - 1).dx, size.height)
-      ..lineTo(at(0).dx, size.height)
-      ..close();
-    canvas.drawPath(area, Paint()..color = fillColor);
-
-    // 線
     canvas.drawPath(
       path,
       Paint()
@@ -301,19 +369,30 @@ class _TrendLinePainter extends CustomPainter {
       );
     }
 
-    // 最新点(状態色 + ハロー)
+    // ---- 現在(最新)だけ状態色で強調 ----
     final last = at(values.length - 1);
     canvas.drawCircle(
-        last, 7, Paint()..color = lastColor.withOpacity(0.15));
-    canvas.drawCircle(last, 3.4, Paint()..color = lastColor);
+        last, 8, Paint()..color = lastColor.withOpacity(0.18));
+    canvas.drawCircle(last, 3.8, Paint()..color = lastColor);
     canvas.drawCircle(
       last,
-      3.4,
+      3.8,
       Paint()
         ..style = PaintingStyle.stroke
         ..strokeWidth = 1.5
         ..color = pointFill,
     );
+  }
+
+  void _label(Canvas canvas, String text, Color color, Offset leftCenter) {
+    final tp = TextPainter(
+      text: TextSpan(
+          text: text,
+          style: labelStyle.copyWith(
+              color: color, fontWeight: FontWeight.w600)),
+      textDirection: TextDirection.ltr,
+    )..layout();
+    tp.paint(canvas, leftCenter - Offset(0, tp.height / 2));
   }
 
   @override

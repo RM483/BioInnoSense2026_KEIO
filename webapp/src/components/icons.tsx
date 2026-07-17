@@ -69,6 +69,21 @@ export const ChevronIcon = ({ size = 16 }: IconProps) => (
   </svg>
 )
 
+/** 小さなチェック(状態チップ用) */
+export const CheckSmallIcon = ({ size = 12 }: IconProps) => (
+  <svg {...base(size)} strokeWidth={2.6}>
+    <path d="M5 12.5 10 17.5 19 7" />
+  </svg>
+)
+
+/** 注意(!) — 色だけに依存せず状態を伝えるための記号 */
+export const ExclamationIcon = ({ size = 12 }: IconProps) => (
+  <svg {...base(size)} strokeWidth={2.6}>
+    <path d="M12 4.5v10" />
+    <path d="M12 19.4v.1" />
+  </svg>
+)
+
 /** 肉球(塗り)。愛犬アバター用。 */
 export const PawIcon = ({ size = 28 }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">
