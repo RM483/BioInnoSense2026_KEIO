@@ -13,31 +13,41 @@ import { logger } from "firebase-functions/v2";
 initializeApp();
 const db = getFirestore();
 
-/** H2高値アラート閾値 [ppb] (20ppm) */
+/** H2高値アラート閾値 [ppb] (20ppm — app/lib/core/constants/h2.dart と同値) */
 const ALERT_THRESHOLD_PPB = 20_000;
 
 /**
  * 測定作成時: dailyStats を増分更新し、閾値超過でアラートを作成する。
  * パス: users/{uid}/dogs/{dogId}/measurements/{measurementId}
+ *
+ * 冪等性: Functions v2はat-least-once配信のため再実行があり得る。
+ * 測定ドキュメント自身の statsApplied フラグをトランザクション内で
+ * 検査・更新することで二重計上を防ぐ。
  */
 export const onMeasurementCreated = onDocumentCreated(
   "users/{uid}/dogs/{dogId}/measurements/{measurementId}",
   async (event) => {
-    const data = event.data?.data();
-    if (!data) return;
+    const snap = event.data;
+    if (!snap) return;
+    const data = snap.data();
 
-    const { uid, dogId } = event.params;
+    const { uid, dogId, measurementId } = event.params;
     const startedAt: Date = data.startedAt.toDate();
     const dateKey = startedAt.toISOString().slice(0, 10); // yyyy-mm-dd
 
     const dogRef = db.doc(`users/${uid}/dogs/${dogId}`);
     const statsRef = dogRef.collection("dailyStats").doc(dateKey);
+    const measurementRef = snap.ref;
 
     // 日次統計をトランザクションで増分更新(再集計不要な設計)
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(statsRef);
-      const prev = snap.exists
-        ? (snap.data() as {
+    const applied = await db.runTransaction(async (tx) => {
+      const mSnap = await tx.get(measurementRef);
+      if (!mSnap.exists || mSnap.data()?.statsApplied === true) {
+        return false; // 再配信 or 既に削除済み → 何もしない
+      }
+      const sSnap = await tx.get(statsRef);
+      const prev = sSnap.exists
+        ? (sSnap.data() as {
             count: number;
             sumAvgPpb: number;
             maxPpb: number;
@@ -54,12 +64,15 @@ export const onMeasurementCreated = onDocumentCreated(
         maxPpb: Math.max(prev.maxPpb, data.maxPpb ?? 0),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      tx.update(measurementRef, { statsApplied: true });
+      return true;
     });
 
-    // 高値アラート (将来: FCM push通知の拡張点)
-    if ((data.avgPpb ?? 0) >= ALERT_THRESHOLD_PPB) {
-      await dogRef.collection("alerts").add({
-        measurementId: event.params.measurementId,
+    // 高値アラート (将来: FCM push通知の拡張点)。
+    // measurementIdをドキュメントIDに使い、再実行でも重複作成しない。
+    if (applied && (data.avgPpb ?? 0) >= ALERT_THRESHOLD_PPB) {
+      await dogRef.collection("alerts").doc(measurementId).set({
+        measurementId,
         avgPpb: data.avgPpb,
         thresholdPpb: ALERT_THRESHOLD_PPB,
         createdAt: FieldValue.serverTimestamp(),

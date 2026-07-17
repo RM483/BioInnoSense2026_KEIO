@@ -41,9 +41,10 @@ Read系(状態・情報)はCharacteristic Readではなく `CMD_GET_STATUS` / `C
 | 0x02 | CMD_STOP | - | 測定停止→EVT_SUMMARY返送 |
 | 0x03 | CMD_SINGLE | - | 単発測定→EVT_DATA 1回 |
 | 0x04 | CMD_SLEEP | - | DGS2 Sleep+MCU STOP2 |
-| 0x05 | CMD_WAKE | - | 復帰 (UART RXで自動Wake後の明示確認) |
+| 0x05 | CMD_WAKE | - | 復帰 (UART RXで自動Wake後の明示確認。ERROR状態からの復旧試行も担う) |
 | 0x06 | CMD_GET_STATUS | - | EVT_STATUS要求 |
 | 0x07 | CMD_GET_INFO | - | EVT_INFO要求 |
+| 0x08 | CMD_ZERO | - | DGS2ゼロ校正('Z')。IDLE時のみ受理(クリーンエア中に実行すること) |
 
 全コマンドに対し FW は **ACK(0x40)** または **NAK(0x41)** を100ms以内に返す。
 
@@ -55,7 +56,7 @@ Read系(状態・情報)はCharacteristic Readではなく `CMD_GET_STATUS` / `C
 | 0x41 | NAK | cmd:u8, err:u8 |
 | 0x81 | EVT_DATA | t_ms:u32, h2_ppb:i32, temp_c10:i16, rh_10:u16, flags:u8 (13B) |
 | 0x82 | EVT_SUMMARY | n:u16, avg_ppb:i32, max_ppb:i32, min_ppb:i32, duration_s:u16 (16B) |
-| 0x83 | EVT_STATUS | state:u8, battery_mv:u16, sensor_ok:u8, uptime_s:u32 (8B) |
+| 0x83 | EVT_STATUS | state:u8, battery_mv:u16, sensor_ok:u8, uptime_s:u32, crc_errors:u16, resyncs:u16 (12B) ※末尾4Bはv1.1追加の診断統計。旧8B形式とは前方互換(受信側は先頭8Bのみ必須) |
 | 0x84 | EVT_ERROR | code:u8, detail:u8 |
 | 0x85 | EVT_INFO | fw_major:u8, fw_minor:u8, sensor_sn:char[12] |
 
@@ -89,15 +90,16 @@ Read系(状態・情報)はCharacteristic Readではなく `CMD_GET_STATUS` / `C
 ```
 App                 FW(STM32)              DGS2
  |--CMD_START_CONT-->|                       |
- |<------ACK---------|--'c' (連続開始)------>|
+ |<------ACK---------|--'C' (連続開始)------>|
  |                   |<---CSV(1Hz)-----------|
  |<--EVT_DATA(1Hz)---|  (パース+検証)         |
- |--CMD_STOP-------->|--'c' (連続停止)------>|
+ |--CMD_STOP-------->|--'C' (連続停止)------>|
  |<------ACK---------|                       |
  |<--EVT_SUMMARY-----|                       |
  |--CMD_SLEEP------->|--'s' (Sleep)--------->|
  |<------ACK---------|  MCU→STOP2            |
 ```
+※ DGS2の連続測定コマンドは**大文字'C'**(コマンドは大文字/小文字を区別 — データシートRev 24a)。
 - EVT_DATA間隔: interval_s (既定1s)。ACKタイムアウト: App側300ms、2回再送、失敗でエラー表示。
 - Keep-alive: Appは接続中常時30s毎に CMD_GET_STATUS(接続監視・バッテリー取得・FW自動停止の抑止を兼ねる)。
 
@@ -105,6 +107,9 @@ App                 FW(STM32)              DGS2
 
 1. 切断検知 → 1s, 2s, 4s, 8s… 最大30s間隔の指数バックオフで自動再接続(ユーザー操作なし)。
 2. 再接続成功 → `CMD_GET_STATUS` で FW 状態を取得し UI 状態を再同期
-   (FWが測定継続中なら測定画面へ復帰、EVT_DATAのSEQ跳びは欠測として記録)。
+   (FWが測定継続中なら測定表示へ復帰)。
 3. 5分失敗 → 再接続画面へ誘導。
-4. FW側: 切断中も測定は60s継続(バッファ32件保持、再接続時に未送分を送出)→60s超で自動STOP+Sleep。
+4. FW側: 切断中も測定は60s継続し、60s超で自動STOP+Sleep。
+   **切断中のデータはFW側でバッファ・再送しない**(AC02は透過ブリッジで
+   FWは接続状態を直接知り得ないため)。切断期間のサンプルは欠測となり、
+   AppがSEQ跳びから欠測数を検出・記録する(`droppedFrames`)。
