@@ -52,6 +52,12 @@ typedef struct {
     uint8_t     retry_count;
     sm_stats_t  stats;
     char        sensor_sn[DGS2_SN_LEN + 1];
+    /* 連続モード実状態の確認・自己修復 (DGS2の'C'はトグルのため、
+     * 期待状態と実受信の突き合わせで不一致を検出する) */
+    uint32_t    stop_toggle_ms;   /**< 最後に停止トグルを送った時刻 */
+    uint8_t     idle_line_count;  /**< IDLE中の予期しない測定行カウント */
+    uint32_t    idle_first_line_ms;
+    uint8_t     idle_stop_attempts;
 } sm_t;
 
 void sm_init(sm_t *sm, dgs2_t *sensor, ble_link_t *link,

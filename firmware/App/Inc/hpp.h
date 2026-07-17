@@ -30,6 +30,7 @@ typedef enum {
     HPP_CMD_WAKE        = 0x05,
     HPP_CMD_GET_STATUS  = 0x06,
     HPP_CMD_GET_INFO    = 0x07,
+    HPP_CMD_ZERO        = 0x08, /**< DGS2ゼロ校正 'Z' (クリーンエア中に実行) */
     HPP_ACK             = 0x40,
     HPP_NAK             = 0x41,
     HPP_EVT_DATA        = 0x81,

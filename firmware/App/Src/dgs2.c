@@ -1,6 +1,7 @@
 /**
  * @file dgs2.c
- * @brief DGS2ドライバ実装。strtok非依存の安全なCSVパーサ。
+ * @brief DGS2 970-Seriesドライバ実装。strtok非依存の安全なCSVパーサ。
+ *        コマンド文字・CSVフォーマットは公式データシート(Rev 24a)準拠。
  */
 #include <string.h>
 #include <stdlib.h>
@@ -20,10 +21,16 @@ static void tx_char(dgs2_t *d, char c)
     d->tx(&b, 1);
 }
 
+/* データシート Command Library (大文字/小文字を区別):
+ *   '\r' Single, 'C' Continuous toggle, 's' Sleep, 'e' EEPROM,
+ *   'Z' Zero, 'r' Reset。Wakeは任意の1バイト(コマンドとして解釈されない)。 */
 void dgs2_cmd_single(dgs2_t *d)            { tx_char(d, '\r'); }
-void dgs2_cmd_continuous_toggle(dgs2_t *d) { tx_char(d, 'c'); d->continuous = !d->continuous; }
-void dgs2_cmd_sleep(dgs2_t *d)             { tx_char(d, 's'); d->continuous = false; }
+void dgs2_cmd_continuous_toggle(dgs2_t *d) { tx_char(d, 'C'); }
+void dgs2_cmd_sleep(dgs2_t *d)             { tx_char(d, 's'); }
+void dgs2_cmd_wake(dgs2_t *d)              { tx_char(d, '\n'); }
 void dgs2_cmd_eeprom(dgs2_t *d)            { tx_char(d, 'e'); }
+void dgs2_cmd_zero(dgs2_t *d)              { tx_char(d, 'Z'); }
+void dgs2_cmd_reset(dgs2_t *d)             { tx_char(d, 'r'); }
 
 bool dgs2_feed(dgs2_t *d, uint8_t byte, char *line_out, size_t line_out_size)
 {
@@ -79,16 +86,18 @@ static bool parse_long(const char *tok, size_t len, long *out)
 
 app_err_t dgs2_parse_line(const char *line, dgs2_sample_t *out)
 {
-    /* SN, PPB, TEMP, RH, ADC_RAW, T_RAW, RH_RAW, DAY, HOUR, MIN, SEC */
-    const char *tok[11];
-    size_t     len[11];
-    int n = split_csv(line, tok, len, 11);
-    if (n < 4) {
+    /* データシート "Example Measurement String" (7フィールド固定):
+     *   SN[12], PPB, TEMP(℃×100), RH(%×100), ADC_G, ADC_T, ADC_H
+     * フィールド数の検証により 'e'(EEPROMダンプ)等の非測定行を弾く。 */
+    const char *tok[DGS2_FIELD_COUNT + 1];
+    size_t     len[DGS2_FIELD_COUNT + 1];
+    int n = split_csv(line, tok, len, DGS2_FIELD_COUNT + 1);
+    if (n != DGS2_FIELD_COUNT) {
         return E_SENSOR_PARSE;
     }
 
-    /* SN: 英数字のみ許可 */
-    if (len[0] == 0U || len[0] > DGS2_SN_LEN) {
+    /* SN: 12桁の英数字のみ許可 */
+    if (len[0] != DGS2_SN_LEN) {
         return E_SENSOR_PARSE;
     }
     for (size_t i = 0; i < len[0]; i++) {
@@ -99,15 +108,28 @@ app_err_t dgs2_parse_line(const char *line, dgs2_sample_t *out)
     memcpy(out->sn, tok[0], len[0]);
     out->sn[len[0]] = '\0';
 
-    long ppb, temp, rh;
+    long ppb, temp_x100, rh_x100;
     if (!parse_long(tok[1], len[1], &ppb) ||
-        !parse_long(tok[2], len[2], &temp) ||
-        !parse_long(tok[3], len[3], &rh)) {
+        !parse_long(tok[2], len[2], &temp_x100) ||
+        !parse_long(tok[3], len[3], &rh_x100)) {
         return E_SENSOR_PARSE;
     }
-    out->h2_ppb  = (int32_t)ppb;
-    out->temp_c10 = (int16_t)(temp * 10);  /* DGS2は整数℃出力 */
-    out->rh10     = (uint16_t)(rh * 10);
+    /* 生値レンジ検証 (データシート: TEMP [-5000:15000], RH [0:10000]) */
+    if (temp_x100 < -5000L || temp_x100 > 15000L ||
+        rh_x100 < 0L || rh_x100 > 10000L) {
+        return E_SENSOR_PARSE;
+    }
+    /* ADC生値3フィールドは数値であることのみ検証(値は未使用) */
+    long adc;
+    for (int i = 4; i < (int)DGS2_FIELD_COUNT; i++) {
+        if (!parse_long(tok[i], len[i], &adc)) {
+            return E_SENSOR_PARSE;
+        }
+    }
+
+    out->h2_ppb   = (int32_t)ppb;
+    out->temp_c10 = (int16_t)(temp_x100 / 10L);  /* ℃×100 → ℃×10 */
+    out->rh10     = (uint16_t)(rh_x100 / 10L);   /* %×100 → %×10 */
     return APP_OK;
 }
 
@@ -118,8 +140,9 @@ uint8_t dgs2_validate(dgs2_t *d, const dgs2_sample_t *s)
     if (s->h2_ppb < DGS2_PPB_MIN || s->h2_ppb > DGS2_PPB_MAX) {
         flags |= HPP_FLAG_OUT_OF_RANGE;
     }
-    int temp_c = s->temp_c10 / 10;
-    if (temp_c < DGS2_TEMP_MIN_C || temp_c > DGS2_TEMP_MAX_C) {
+    /* 温湿度が性能保証レンジ外 → 参考値扱い(UNSTABLE) */
+    if (s->temp_c10 < DGS2_TEMP_MIN_C10 || s->temp_c10 > DGS2_TEMP_MAX_C10 ||
+        s->rh10 < DGS2_RH_MIN_10 || s->rh10 > DGS2_RH_MAX_10) {
         flags |= HPP_FLAG_UNSTABLE;
     }
 
