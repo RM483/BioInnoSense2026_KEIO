@@ -102,6 +102,8 @@
   "begin": "Begin",
   "finishMeasurement": "Finish",
   "measuringCalm": "Gently, stay as you are",
+  "analyzing": "Analyzing…",
+  "analyzingSub": "Summarizing today's condition",
   "resultTitle": "All done",
   "resultDuration": "Duration",
   "resultSamples": "Samples",

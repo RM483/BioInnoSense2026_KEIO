@@ -1,44 +1,87 @@
 /**
- * HydroPaw — 犬の健康を毎日そっと見守るプロダクトのWeb体験。
+ * HydroPaw — 犬の健康を毎日そっと見守るプロダクト (SPA)。
  *
- * 設計思想 (Apple Health / Fitness を参照):
- * - 主役は「今日は安定しています」という意味の言葉。ppmは補助情報。
- * - 単一カラム・十分な余白・静かなカード・控えめなアニメーション。
- * - 測定中だけライブビュー(状態の言葉 + 小さな数値 + 1本の線)に切り替わる。
- * - デバイス・温湿度などの技術情報は最下部の「詳細」に隔離する。
- * データは DataProvider (Mock/BLE) 経由 — 差し替えは providers/index.ts。
+ * 構成: 4タブ(ホーム/履歴/愛犬/設定) + 測定はホームCTAから始まる
+ * フルスクリーンの「イベント」(測定中→解析中→結果)。
+ * ナビはモバイルで下部タブバー、iPad/Macでは上部セグメント。
+ * データはDataProvider(Mock/BLE)経由 — 切替は providers/index.ts の1箇所。
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Chart } from './components/Chart'
+import {
+  ChartIcon,
+  GearIcon,
+  HeartIcon,
+  HouseIcon,
+  PawIcon,
+  WaveIcon,
+} from './components/icons'
 import type {
   ConnectionStatus,
   SensorSample,
   SessionSummary,
 } from './providers/DataProvider'
-import { FLAG_WARMUP } from './providers/DataProvider'
 import { createProvider } from './providers'
+import { loadProfile, saveProfile, type DogProfile } from './lib/dogProfile'
 import {
-  assess,
-  assessmentComment,
-  levelColor,
-  levelForPpm,
-  levelPhrase,
-  levelShort,
-  relativeTime,
-} from './lib/assessment'
+  DogView,
+  HistoryView,
+  HomeView,
+  MeasureFlow,
+  MeasureStartView,
+  SettingsView,
+  type FlowPhase,
+} from './views'
 
 const MAX_SAMPLES = 1800
 const HISTORY_KEY = 'hydropaw.history.v1'
+const MIN_ANALYZING_MS = 1400
+
+type Tab = 'home' | 'measure' | 'history' | 'dog' | 'settings'
+
+const TABS: { id: Tab; label: string; icon: (p: { size?: number }) => JSX.Element }[] = [
+  { id: 'home', label: 'ホーム', icon: HouseIcon },
+  { id: 'measure', label: '測定', icon: WaveIcon },
+  { id: 'history', label: '履歴', icon: ChartIcon },
+  { id: 'dog', label: '愛犬', icon: HeartIcon },
+  { id: 'settings', label: '設定', icon: GearIcon },
+]
+
+function tabFromHash(): Tab {
+  const h = location.hash.replace('#/', '')
+  return (['home', 'measure', 'history', 'dog', 'settings'] as Tab[]).includes(
+    h as Tab,
+  )
+    ? (h as Tab)
+    : 'home'
+}
 
 export default function App() {
   const provider = useMemo(createProvider, [])
+  const [tab, setTab] = useState<Tab>(tabFromHash)
   const [conn, setConn] = useState<ConnectionStatus>('disconnected')
-  const [measuring, setMeasuring] = useState(false)
+  const [flow, setFlow] = useState<FlowPhase | null>(null)
   const [samples, setSamples] = useState<SensorSample[]>([])
   const [history, setHistory] = useState<SessionSummary[]>(loadHistory)
+  const [result, setResult] = useState<SessionSummary | null>(null)
+  const [profile, setProfile] = useState<DogProfile>(loadProfile)
   const [busy, setBusy] = useState(false)
   const sessionStart = useRef<Date | null>(null)
+  const latest = samples.at(-1) ?? null
 
+  // ---- SPAルーティング (hash) ----
+  useEffect(() => {
+    const onHash = () => setTab(tabFromHash())
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+
+  const go = useCallback((t: Tab) => {
+    location.hash = `#/${t}`
+    setTab(t)
+    window.scrollTo({ top: 0 })
+  }, [])
+
+  // ---- Provider購読 ----
   useEffect(() => {
     const offConn = provider.onConnection(setConn)
     const offSample = provider.onSample((s) =>
@@ -53,26 +96,15 @@ export default function App() {
     }
   }, [provider])
 
-  const connect = useCallback(async () => {
-    setBusy(true)
-    try {
-      await provider.connect()
-    } catch (e) {
-      console.error(e)
-      alert((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }, [provider])
-
-  const start = useCallback(async () => {
+  // ---- 測定フロー ----
+  const startMeasurement = useCallback(async () => {
     setBusy(true)
     try {
       if (conn !== 'connected') await provider.connect()
       setSamples([])
       sessionStart.current = new Date()
       await provider.startMeasurement()
-      setMeasuring(true)
+      setFlow('measuring')
     } catch (e) {
       console.error(e)
       alert((e as Error).message)
@@ -81,30 +113,51 @@ export default function App() {
     }
   }, [provider, conn])
 
-  const stop = useCallback(async () => {
+  const finishMeasurement = useCallback(async () => {
+    setFlow('analyzing')
+    const t0 = Date.now()
+    const summary =
+      (await provider.stopMeasurement()) ??
+      localSummary(samples, sessionStart.current)
+    if (summary && summary.sampleCount > 0) {
+      setHistory((prev) => {
+        const next = [summary, ...prev].slice(0, 100)
+        localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
+        return next
+      })
+      setResult(summary)
+    }
+    // 「解析しています…」の間を最低確保(儀式としての測定体験)
+    const wait = Math.max(0, MIN_ANALYZING_MS - (Date.now() - t0))
+    setTimeout(() => setFlow(summary ? 'result' : null), wait)
+  }, [provider, samples])
+
+  const closeFlow = useCallback(() => {
+    setFlow(null)
+    setResult(null)
+    go('home')
+  }, [go])
+
+  const connect = useCallback(async () => {
     setBusy(true)
     try {
-      const summary =
-        (await provider.stopMeasurement()) ??
-        localSummary(samples, sessionStart.current)
-      setMeasuring(false)
-      if (summary && summary.sampleCount > 0) {
-        setHistory((prev) => {
-          const next = [summary, ...prev].slice(0, 50)
-          localStorage.setItem(HISTORY_KEY, JSON.stringify(next))
-          return next
-        })
-      }
+      await provider.connect()
+    } catch (e) {
+      alert((e as Error).message)
     } finally {
       setBusy(false)
     }
-  }, [provider, samples])
+  }, [provider])
 
-  const latest = samples.at(-1)
-  const livePpm = latest ? latest.hydrogen_ppb / 1000 : null
-  const liveLevel = livePpm === null ? 'none' : levelForPpm(livePpm)
-  const warmingUp = latest ? (latest.flags & FLAG_WARMUP) !== 0 : false
-  const assessment = useMemo(() => assess(history), [history])
+  const disconnect = useCallback(async () => {
+    setBusy(true)
+    try {
+      await provider.disconnect()
+    } finally {
+      setBusy(false)
+    }
+  }, [provider])
+
   const today = useMemo(
     () =>
       new Intl.DateTimeFormat('ja-JP', {
@@ -117,230 +170,103 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* ---- ヘッダ: 日付 + 犬の名前 ---- */}
+      {/* ---- ヘッダ ---- */}
       <header className="header">
+        <div className="brand-avatar">
+          <PawIcon size={22} />
+        </div>
         <div className="titles">
           <div className="date">{today}</div>
-          <h1>ポチ</h1>
+          <h1>{profile.name}</h1>
         </div>
-        <div className="pills">
-          {provider.name === 'Mock' && <span className="pill accent">デモ</span>}
-          <ConnectionPill conn={conn} />
-        </div>
+        <nav className="tabbar top" aria-label="ナビゲーション">
+          {TABS.map(({ id, label, icon: Icon }) => (
+            <button
+              key={id}
+              className={`tab ${tab === id ? 'active' : ''}`}
+              onClick={() => go(id)}
+            >
+              <Icon size={20} />
+              <span>{label}</span>
+            </button>
+          ))}
+        </nav>
       </header>
 
-      <div className="stack">
-        {measuring ? (
-          /* ============ 測定中ビュー ============ */
-          <>
-            <section className="card hero">
-              <div className="card-head">
-                <span className="label">測定中</span>
-                <span className="aside">
-                  {latest ? elapsedLabel(latest) : '00:00'}
-                </span>
-              </div>
-              <div className="live">
-                <span
-                  className="live-dot"
-                  style={{ background: levelColor[liveLevel] }}
-                />
-                <span className="phrase" style={{ color: levelColor[liveLevel] }}>
-                  {livePpm === null ? '待機中…' : levelShort[liveLevel]}
-                </span>
-              </div>
-              <div className="live-sub">
-                {livePpm !== null && (
-                  <span className="value-sub">{livePpm.toFixed(1)} ppm</span>
-                )}
-                {warmingUp && (
-                  <span className="pill warn">ウォームアップ中（参考値）</span>
-                )}
-              </div>
-            </section>
+      {/* ---- ビュー ---- */}
+      {tab === 'home' && (
+        <HomeView
+          history={history}
+          conn={conn}
+          busy={busy}
+          onStart={startMeasurement}
+          onOpenHistory={() => go('history')}
+        />
+      )}
+      {tab === 'measure' && (
+        <MeasureStartView
+          dogName={profile.name}
+          conn={conn}
+          busy={busy}
+          onStart={startMeasurement}
+        />
+      )}
+      {tab === 'history' && <HistoryView history={history} />}
+      {tab === 'dog' && (
+        <DogView
+          profile={profile}
+          historyCount={history.length}
+          onSave={(p) => {
+            saveProfile(p)
+            setProfile(p)
+          }}
+        />
+      )}
+      {tab === 'settings' && (
+        <SettingsView
+          conn={conn}
+          providerName={provider.name}
+          latest={latest}
+          busy={busy}
+          onConnect={connect}
+          onDisconnect={disconnect}
+          onClearHistory={() => {
+            localStorage.removeItem(HISTORY_KEY)
+            setHistory([])
+          }}
+        />
+      )}
 
-            <section className="card chart-card">
-              <div className="card-head">
-                <span className="label plain">セッション推移</span>
-              </div>
-              <Chart samples={samples} />
-            </section>
+      {/* ---- 下部タブバー (モバイル) ---- */}
+      <nav className="tabbar bottom" aria-label="ナビゲーション">
+        {TABS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            className={`tab ${tab === id ? 'active' : ''}`}
+            onClick={() => go(id)}
+          >
+            <Icon size={22} />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
 
-            <div className="controls">
-              <button className="btn stop" onClick={stop} disabled={busy}>
-                終了する
-              </button>
-            </div>
-          </>
-        ) : (
-          /* ============ ホームビュー ============ */
-          <>
-            <section className="card hero">
-              <div className="hero-status">
-                <span
-                  className="live-dot"
-                  style={{ background: levelColor[assessment.level] }}
-                />
-                <span className="phrase">{levelPhrase[assessment.level]}</span>
-              </div>
-              <p className="comment">{assessmentComment(assessment)}</p>
-              {assessment.latest && (
-                <div className="last-measured">
-                  最終測定 · {relativeTime(assessment.latest.startedAt)}
-                </div>
-              )}
-            </section>
-
-            {history.length >= 2 && (
-              <section className="card">
-                <div className="card-head">
-                  <span className="label plain">最近の推移</span>
-                </div>
-                <TrendBars history={history} />
-              </section>
-            )}
-
-            <div className="controls">
-              <button
-                className="btn primary"
-                onClick={start}
-                disabled={busy || conn === 'connecting'}
-              >
-                {conn === 'connecting' ? '接続しています…' : '測定をはじめる'}
-              </button>
-            </div>
-
-            {history.length > 0 && (
-              <section className="card">
-                <div className="card-head">
-                  <span className="label plain">履歴</span>
-                  <span className="aside">{history.length}件</span>
-                </div>
-                <div className="history-list">
-                  {history.slice(0, 8).map((h, i) => (
-                    <HistoryRow key={`${h.startedAt}-${i}`} s={h} />
-                  ))}
-                </div>
-              </section>
-            )}
-
-            {/* ---- 技術情報はいちばん下に隔離 ---- */}
-            <section className="card details">
-              <div className="card-head">
-                <span className="label plain">詳細</span>
-              </div>
-              <div className="kv">
-                <div className="row">
-                  <span className="k">接続</span>
-                  <span className="v">{connLabel(conn)}</span>
-                </div>
-                {conn !== 'connected' && (
-                  <div className="row">
-                    <span className="k"></span>
-                    <button className="linklike" onClick={connect} disabled={busy}>
-                      デバイスに接続する
-                    </button>
-                  </div>
-                )}
-                <div className="row">
-                  <span className="k">温度</span>
-                  <span className="v">
-                    {latest ? `${latest.temperature.toFixed(1)}℃` : '—'}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="k">湿度</span>
-                  <span className="v">
-                    {latest ? `${latest.humidity.toFixed(0)}%` : '—'}
-                  </span>
-                </div>
-                <div className="row">
-                  <span className="k">電池</span>
-                  <span className="v">{latest ? `${latest.battery}%` : '—'}</span>
-                </div>
-                <div className="row">
-                  <span className="k">プロバイダ</span>
-                  <span className="v">{provider.name}</span>
-                </div>
-              </div>
-            </section>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
-/* ---------- 部品 ---------- */
-
-function ConnectionPill({ conn }: { conn: ConnectionStatus }) {
-  const cls =
-    conn === 'connected' ? 'ok' : conn === 'connecting' ? 'warn' : 'muted'
-  return (
-    <span className={`pill ${cls}`}>
-      <span className="dot" />
-      {connLabel(conn)}
-    </span>
-  )
-}
-
-function connLabel(conn: ConnectionStatus): string {
-  return conn === 'connected'
-    ? '接続中'
-    : conn === 'connecting'
-      ? '接続処理中…'
-      : '未接続'
-}
-
-/** 数値を出さない最近の推移(色 = その日の状態) */
-function TrendBars({ history }: { history: SessionSummary[] }) {
-  const items = history.slice(0, 7).reverse()
-  const maxPpm = Math.max(10, ...items.map((h) => h.avgPpb / 1000))
-  return (
-    <div className="trend-bars">
-      {items.map((h, i) => {
-        const ppm = h.avgPpb / 1000
-        return (
-          <div className="trend-slot" key={`${h.startedAt}-${i}`}>
-            <div
-              className="trend-bar"
-              style={{
-                height: `${Math.max(12, (ppm / maxPpm) * 100)}%`,
-                background: levelColor[levelForPpm(ppm)],
-              }}
-            />
-          </div>
-        )
-      })}
-    </div>
-  )
-}
-
-function HistoryRow({ s }: { s: SessionSummary }) {
-  const ppm = s.avgPpb / 1000
-  const level = levelForPpm(ppm)
-  const d = new Date(s.startedAt)
-  const when = `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
-  return (
-    <div className="history-item">
-      <span className="level-dot" style={{ background: levelColor[level] }} />
-      <span className="level-label">{levelShort[level]}</span>
-      <span className="when">{when}</span>
-      <span className="meta">{ppm.toFixed(1)} ppm</span>
+      {/* ---- 測定フロー (フルスクリーンイベント) ---- */}
+      {flow && (
+        <MeasureFlow
+          phase={flow}
+          samples={samples}
+          dogName={profile.name}
+          result={result}
+          onFinish={finishMeasurement}
+          onDone={closeFlow}
+        />
+      )}
     </div>
   )
 }
 
 /* ---------- ヘルパ ---------- */
-
-function elapsedLabel(latest: SensorSample): string {
-  // MockはEVT_DATA相当のtimestampを持つ; セッション経過はサンプル数から近似しない
-  return new Intl.DateTimeFormat('ja-JP', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(new Date(latest.timestamp))
-}
 
 function localSummary(
   samples: SensorSample[],
@@ -369,5 +295,3 @@ function loadHistory(): SessionSummary[] {
     return []
   }
 }
-
-const pad = (n: number) => String(n).padStart(2, '0')

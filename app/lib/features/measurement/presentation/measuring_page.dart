@@ -1,7 +1,10 @@
 /// 測定中 — フルスクリーンの静かな画面。
 /// 主役は「いまの状態の言葉」。数値(ppm)は補助情報として小さく添える。
 /// 開始は画面表示と同時に自動で行われ、ユーザーは「終了する」だけ。
+/// 終了後は「解析しています…」の間(最低1.2s)を置いてから結果へ —
+/// 測定をひとつのイベントとして完結させる。
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
@@ -30,11 +33,17 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
     duration: const Duration(seconds: 4),
   )..repeat(reverse: true);
 
+  DateTime? _stopPressedAt;
+
+  /// 「解析しています…」の最低表示時間(結果が一瞬で出て儀式感が失われるのを防ぐ)
+  static const _minAnalyzing = Duration(milliseconds: 1200);
+
   @override
   void initState() {
     super.initState();
     // 画面表示と同時に測定開始(体験をひとつながりにする)
     Future.microtask(() {
+      HapticFeedback.lightImpact();
       final c = ref.read(measurementControllerProvider.notifier);
       c
         ..resetSession()
@@ -56,12 +65,20 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
     final ble = ref.watch(bleControllerProvider);
     final dog = ref.watch(selectedDogProvider);
 
-    // 保存完了 → 結果へ / エラー → エラー画面へ
+    // 保存完了 → (解析の間を保って) 結果へ / エラー → エラー画面へ
     ref.listen(measurementControllerProvider, (prev, next) {
       if (!context.mounted) return;
       if (prev?.phase != MeasurePhase.saved &&
           next.phase == MeasurePhase.saved) {
-        context.pushReplacement(Routes.measureResult);
+        final elapsed = _stopPressedAt == null
+            ? _minAnalyzing
+            : DateTime.now().difference(_stopPressedAt!);
+        final wait = _minAnalyzing - elapsed;
+        Future.delayed(wait.isNegative ? Duration.zero : wait, () {
+          if (!context.mounted) return;
+          HapticFeedback.mediumImpact();
+          context.pushReplacement(Routes.measureResult);
+        });
       } else if (prev?.phase != MeasurePhase.error &&
           next.phase == MeasurePhase.error) {
         context.pushReplacement(Routes.error,
@@ -73,7 +90,9 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
     final level = latest == null
         ? null
         : HealthAssessment.levelForPpm(latest.h2Ppm);
-    final busy = measure.phase == MeasurePhase.stopping;
+    // 終了後〜結果表示までは「解析しています…」の静かな間
+    final analyzing = measure.phase == MeasurePhase.stopping ||
+        measure.phase == MeasurePhase.saved;
 
     return Scaffold(
       body: SafeArea(
@@ -137,33 +156,47 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
                         border: Border.all(
                             color: color.withOpacity(0.35), width: 1.5),
                       ),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          AnimatedSwitcher(
-                            duration: const Duration(milliseconds: 300),
-                            child: Text(
-                              latest == null
-                                  ? '…'
-                                  : level!.shortLabel(l10n),
-                              key: ValueKey(level),
-                              style: AppText.title.copyWith(
-                                  fontSize: 24,
-                                  color: latest == null
-                                      ? p.textTertiary
-                                      : level.color(p)),
-                            ),
-                          ),
-                          if (latest != null) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              '${latest.h2Ppm.toStringAsFixed(1)} ${l10n.ppm}',
-                              key: const ValueKey('h2-value'),
-                              style: AppText.caption
-                                  .copyWith(color: p.textTertiary),
-                            ),
-                          ],
-                        ],
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 350),
+                        child: analyzing
+                            ? Text(
+                                l10n.analyzing,
+                                key: const ValueKey('analyzing'),
+                                style: AppText.title.copyWith(
+                                    fontSize: 19,
+                                    color: p.textSecondary),
+                              )
+                            : Column(
+                                key: const ValueKey('live'),
+                                mainAxisAlignment:
+                                    MainAxisAlignment.center,
+                                children: [
+                                  AnimatedSwitcher(
+                                    duration: const Duration(
+                                        milliseconds: 300),
+                                    child: Text(
+                                      latest == null
+                                          ? '…'
+                                          : level!.shortLabel(l10n),
+                                      key: ValueKey(level),
+                                      style: AppText.title.copyWith(
+                                          fontSize: 24,
+                                          color: latest == null
+                                              ? p.textTertiary
+                                              : level.color(p)),
+                                    ),
+                                  ),
+                                  if (latest != null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      '${latest.h2Ppm.toStringAsFixed(1)} ${l10n.ppm}',
+                                      key: const ValueKey('h2-value'),
+                                      style: AppText.caption.copyWith(
+                                          color: p.textTertiary),
+                                    ),
+                                  ],
+                                ],
+                              ),
                       ),
                     ),
                   );
@@ -175,45 +208,57 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
                 style: AppText.title.copyWith(color: p.textPrimary),
               ),
               const SizedBox(height: 6),
-              Text(
-                (latest?.isWarmup ?? false)
-                    ? l10n.warmingUp
-                    : l10n.measuringCalm,
-                style: AppText.caption.copyWith(color: p.textSecondary),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 300),
+                child: Text(
+                  analyzing
+                      ? l10n.analyzingSub
+                      : (latest?.isWarmup ?? false)
+                          ? l10n.warmingUp
+                          : l10n.measuringCalm,
+                  key: ValueKey(analyzing),
+                  style: AppText.caption.copyWith(color: p.textSecondary),
+                ),
               ),
               const Spacer(),
 
               // ---- ライブスパークライン(装飾を排した1本の線) ----
-              SizedBox(
-                height: 56,
-                child: measure.samples.length >= 2
-                    ? _MiniSparkline(
-                        samples: measure.samples,
-                        color: (level?.color(p) ?? p.accent))
-                    : const SizedBox.shrink(),
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: analyzing ? 0 : 1,
+                child: SizedBox(
+                  height: 56,
+                  child: measure.samples.length >= 2
+                      ? _MiniSparkline(
+                          samples: measure.samples,
+                          color: (level?.color(p) ?? p.accent))
+                      : const SizedBox.shrink(),
+                ),
               ),
               const SizedBox(height: 24),
 
-              // ---- 終了 ----
-              FilledButton(
-                style: FilledButton.styleFrom(
-                  backgroundColor: p.textPrimary,
-                  foregroundColor: p.bg,
+              // ---- 終了 (解析中は静かに消える) ----
+              AnimatedOpacity(
+                duration: const Duration(milliseconds: 300),
+                opacity: analyzing ? 0 : 1,
+                child: FilledButton(
+                  style: FilledButton.styleFrom(
+                    backgroundColor: p.textPrimary,
+                    foregroundColor: p.bg,
+                  ),
+                  onPressed: measure.phase != MeasurePhase.measuring
+                      ? null
+                      : () {
+                          HapticFeedback.lightImpact();
+                          _stopPressedAt = DateTime.now();
+                          ref
+                              .read(
+                                  measurementControllerProvider.notifier)
+                              .stopAndSave(dog?.id ?? '',
+                                  ble.connectedDeviceId ?? '');
+                        },
+                  child: Text(l10n.finishMeasurement),
                 ),
-                onPressed: busy || measure.phase != MeasurePhase.measuring
-                    ? null
-                    : () => ref
-                        .read(measurementControllerProvider.notifier)
-                        .stopAndSave(
-                            dog?.id ?? '', ble.connectedDeviceId ?? ''),
-                child: busy
-                    ? SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                            strokeWidth: 2.2, color: p.bg),
-                      )
-                    : Text(l10n.finishMeasurement),
               ),
             ],
           ),

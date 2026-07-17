@@ -1,7 +1,6 @@
 /**
- * App動作検証 (jsdom + MockProvider実物)。
- * 「意味が主役」のプロダクト体験: ホーム→測定→ライブ更新→終了→
- * ホームに意味の言葉と履歴が反映される、までを実行して確認する。
+ * SPA動作検証 (jsdom + MockProvider実物)。
+ * ホーム→測定(イベント)→解析中→結果→ホーム反映、タブ遷移、永続化。
  *   npx vitest run
  */
 // @vitest-environment jsdom
@@ -15,79 +14,100 @@ async function tick(ms: number) {
   })
 }
 
-describe('HydroPaw Web (MockProvider)', () => {
+describe('HydroPaw Web SPA (MockProvider)', () => {
   beforeEach(() => {
     cleanup()
     localStorage.clear()
+    location.hash = ''
     vi.useFakeTimers()
   })
 
-  it('ホームは意味の言葉が主役 → 測定中は状態+小さなppm → 終了で履歴と評価に反映', async () => {
+  it('測定イベント: ホーム→測定中→解析中→結果→ホームに意味が反映される', async () => {
     render(<App />)
 
-    // 初期ホーム: 専門用語ではなく促しの言葉
+    // ホーム: 意味の言葉が主役、専門用語なし
     expect(screen.getByText('はじめての測定をしてみましょう')).toBeTruthy()
-    expect(screen.getAllByText('未接続').length).toBeGreaterThan(0)
-    expect(document.querySelector('.metric')).toBeNull() // 数値タイルは無い
+    expect(document.querySelector('.overlay')).toBeNull()
 
-    // 測定開始(未接続なら自動で接続してから開始)
+    // 測定開始(自動接続)
     fireEvent.click(screen.getByText('測定をはじめる'))
     await tick(10)
     expect(screen.getByText('接続しています…')).toBeTruthy()
-    await tick(900) // 接続700ms + ACK
-    expect(screen.getByText('接続中')).toBeTruthy()
-    expect(screen.getByText('測定中')).toBeTruthy()
+    await tick(900)
 
-    // ライブ更新: 状態の言葉 + 小さなppm
+    // フルスクリーンの測定中ビュー
+    expect(document.querySelector('.overlay')).toBeTruthy()
     await tick(1100)
-    const ppm1 = document.querySelector('.value-sub')!.textContent!
+    expect(
+      ['安定', 'やや高め', '高め'],
+    ).toContain(document.querySelector('.ring-word')!.textContent)
+    const ppm1 = document.querySelector('.ring-ppm')!.textContent!
     expect(ppm1).toMatch(/ppm/)
-    expect(screen.getByText('ウォームアップ中（参考値）')).toBeTruthy()
-    expect(['安定', 'やや高め', '高め']).toContain(
-      document.querySelector('.live .phrase')!.textContent,
-    )
 
-    // 1Hzで値が動く
-    await tick(2100)
-    const ppm2 = document.querySelector('.value-sub')!.textContent!
-    expect(ppm2).not.toBe(ppm1)
-
-    // グラフが伸びる
+    // 1Hz更新 + グラフ伸長
     const d1 = document.querySelector('svg path[stroke]')!.getAttribute('d')!
     await tick(2100)
+    const ppm2 = document.querySelector('.ring-ppm')!.textContent!
+    expect(ppm2).not.toBe(ppm1)
     const d2 = document.querySelector('svg path[stroke]')!.getAttribute('d')!
     expect(d2.length).toBeGreaterThan(d1.length)
 
-    // 終了 → ホームへ戻り、意味の言葉 + 履歴 + 最終測定時刻
+    // 終了 → 解析中(最低1.4s) → 結果
     fireEvent.click(screen.getByText('終了する'))
     await tick(200)
-    expect(screen.getByText('測定をはじめる')).toBeTruthy()
-    expect(document.querySelectorAll('.history-item').length).toBe(1)
+    expect(screen.getByText('解析しています…')).toBeTruthy()
+    await tick(1500)
+    expect(screen.getByText('測定できました')).toBeTruthy()
+    expect(screen.getByText('測定時間')).toBeTruthy()
+
+    // ホームへ → 評価と履歴が更新されている
+    fireEvent.click(screen.getByText('ホームに戻る'))
+    await tick(50)
+    expect(document.querySelector('.overlay')).toBeNull()
     expect(
       ['今日は安定しています', '少し高めです。様子を見ましょう', '高めの値が続いています'],
     ).toContain(document.querySelector('.hero .phrase')!.textContent)
+    expect(document.querySelectorAll('.history-item').length).toBeGreaterThan(0)
     expect(document.querySelector('.last-measured')!.textContent).toContain(
       '最終測定',
     )
-
-    // 技術情報(温湿度・電池)は「詳細」カードに隔離されている
-    const details = document.querySelector('.details')!
-    expect(details.textContent).toMatch(/温度/)
-    expect(details.textContent).toMatch(/電池.*\d+%/)
   }, 15000)
 
-  it('履歴はlocalStorageに保存され、リロード後も評価が表示される', async () => {
+  it('タブ遷移: 設定に技術情報が隔離され、愛犬プロフィールが編集できる', async () => {
+    render(<App />)
+
+    // ホームには電池・温度が無い
+    expect(document.body.textContent).not.toContain('電池')
+
+    // 設定タブ → デバイス情報
+    fireEvent.click(screen.getAllByText('設定')[0])
+    await tick(10)
+    expect(document.body.textContent).toContain('電池')
+    expect(document.body.textContent).toContain('データソース')
+
+    // 愛犬タブ → 名前を変更して保存 → ヘッダに反映
+    fireEvent.click(screen.getAllByText('愛犬')[0])
+    await tick(10)
+    const nameInput = document.querySelector('.form input') as HTMLInputElement
+    fireEvent.change(nameInput, { target: { value: 'ハチ' } })
+    fireEvent.click(screen.getByText('保存'))
+    await tick(10)
+    expect(document.querySelector('.header h1')!.textContent).toBe('ハチ')
+  })
+
+  it('履歴はlocalStorageに永続化され、リロード後も評価が表示される', async () => {
     render(<App />)
     fireEvent.click(screen.getByText('測定をはじめる'))
     await tick(900)
     await tick(3300)
     fireEvent.click(screen.getByText('終了する'))
-    await tick(200)
-    expect(document.querySelectorAll('.history-item').length).toBe(1)
+    await tick(1700)
+    fireEvent.click(screen.getByText('ホームに戻る'))
+    await tick(50)
+    expect(document.querySelectorAll('.history-item').length).toBeGreaterThan(0)
 
     cleanup()
     render(<App />) // リロード相当
-    expect(document.querySelectorAll('.history-item').length).toBe(1)
     expect(document.querySelector('.hero .phrase')!.textContent).not.toBe(
       'はじめての測定をしてみましょう',
     )

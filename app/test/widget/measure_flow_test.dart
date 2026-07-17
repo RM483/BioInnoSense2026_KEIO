@@ -154,6 +154,9 @@ void main() {
 
     await tester.tap(find.text('終了する'));
     await settle(tester, const Duration(milliseconds: 300)); // ACK+summary
+    // 「解析しています…」の間(最低1.2s)を経て結果へ
+    expect(find.text('解析しています…'), findsOneWidget);
+    await settle(tester, const Duration(milliseconds: 1400));
     await settle(tester, const Duration(milliseconds: 700)); // 遷移完了
 
     expect(find.text('測定できました'), findsOneWidget);

@@ -62,16 +62,36 @@ body {
 }
 
 .app {
-  max-width: 720px;
+  max-width: 680px;
   margin: 0 auto;
-  padding: 32px 20px 80px;
+  padding: 32px 20px 96px; /* 下部タブバー分の余白 */
+}
+
+@media (min-width: 720px) {
+  .app {
+    padding-bottom: 60px;
+  }
 }
 
 /* ---- ヘッダ (Large Title) ---- */
 .header {
   display: flex;
   align-items: flex-end;
+  gap: 14px;
   margin: 8px 4px 20px;
+}
+
+.brand-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  align-self: center;
 }
 
 .header .titles {
@@ -174,9 +194,13 @@ body {
 .hero-status,
 .live {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 12px;
   margin-top: 2px;
+}
+
+.hero-status .live-dot {
+  margin-top: 11px; /* 1行目の光学中心に合わせる */
 }
 
 .live-dot {
@@ -462,6 +486,314 @@ button:disabled { cursor: default; opacity: 0.4; }
   font-size: 14px;
   font-weight: 600;
   padding: 0;
+}
+
+.linklike.danger { color: var(--danger); }
+
+/* ==== ナビゲーション ==== */
+.tabbar {
+  display: flex;
+  gap: 2px;
+}
+
+.tabbar .tab {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 4px 6px;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.1px;
+  border-radius: 10px;
+  transition: color 0.2s ease;
+}
+
+.tabbar .tab.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* モバイル: 下部固定 */
+.tabbar.bottom {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 6px 12px calc(6px + env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid var(--hairline);
+  z-index: 20;
+}
+
+.tabbar.top { display: none; }
+
+/* iPad / Mac: ヘッダ右のセグメントに */
+@media (min-width: 720px) {
+  .tabbar.bottom { display: none; }
+  .tabbar.top {
+    display: flex;
+    gap: 4px;
+    align-self: center;
+  }
+  .tabbar.top .tab {
+    flex: none;
+    flex-direction: row;
+    gap: 7px;
+    padding: 9px 14px;
+    font-size: 13px;
+    border-radius: 100px;
+  }
+  .tabbar.top .tab.active {
+    background: var(--accent-soft);
+  }
+}
+
+/* ==== ビュー切替 (静かなフェード+上昇) ==== */
+.view {
+  animation: viewIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes viewIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ==== 測定フロー (フルスクリーンイベント) ==== */
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: var(--bg);
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: viewIn 0.32s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.flow {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 560px;
+}
+
+.flow-title {
+  margin-top: 26px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.comment.center {
+  text-align: center;
+  margin-top: 8px;
+}
+
+/* 呼吸リング (4sでゆっくり) */
+.ring-outer {
+  width: 200px;
+  height: 200px;
+  border-radius: 50%;
+  border: 1.5px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: breathe 4s ease-in-out infinite;
+}
+
+.ring-outer.idle { animation-duration: 6s; }
+
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ring-outer { animation: none; }
+  .view, .overlay { animation: none; }
+}
+
+.ring-inner {
+  width: 164px;
+  height: 164px;
+  border-radius: 50%;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  box-shadow: var(--shadow);
+}
+
+.ring-word {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  transition: color 0.35s ease;
+}
+
+.ring-ppm {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.ring-analyzing {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.flow-spark {
+  width: 100%;
+  margin: 26px 0 8px;
+  transition: opacity 0.3s ease;
+}
+
+.flow-spark .chart-svg { height: 130px; }
+
+.flow .controls { transition: opacity 0.3s ease; margin-top: 10px; }
+
+/* 結果 */
+.result-badge {
+  width: 108px;
+  height: 108px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: popIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.92); }
+  to { opacity: 1; transform: none; }
+}
+
+.stats-inline {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  max-width: 420px;
+  margin: 26px 0 18px;
+  padding: 18px 8px;
+}
+
+.stats-inline .stat {
+  flex: 1;
+  text-align: center;
+}
+
+.stats-inline .stat .v {
+  font-size: 19px;
+  font-weight: 600;
+  letter-spacing: -0.3px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stats-inline .stat .k {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+}
+
+.stats-inline .sep {
+  width: 1px;
+  height: 30px;
+  background: var(--hairline);
+}
+
+/* ==== 愛犬 ==== */
+.dog-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 34px 24px;
+  text-align: center;
+}
+
+.avatar.big {
+  width: 96px;
+  height: 96px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dog-name {
+  margin-top: 16px;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+}
+
+.dog-sub {
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
+.dog-count {
+  margin-top: 14px;
+  font-size: 12.5px;
+  color: var(--text-tertiary);
+}
+
+/* ==== フォーム ==== */
+.form {
+  display: grid;
+  gap: 14px;
+  margin-top: 6px;
+}
+
+.form label {
+  display: grid;
+  gap: 6px;
+}
+
+.form label span {
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  padding-left: 2px;
+}
+
+.form input {
+  font: inherit;
+  font-size: 15px;
+  color: var(--text-primary);
+  background: var(--card-elevated);
+  border: none;
+  border-radius: 12px;
+  padding: 13px 14px;
+  outline: none;
+  transition: box-shadow 0.15s ease;
+}
+
+.form input:focus {
+  box-shadow: 0 0 0 1.5px var(--accent);
 }
 
 .empty-note {

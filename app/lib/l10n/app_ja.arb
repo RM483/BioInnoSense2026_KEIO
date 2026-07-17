@@ -102,6 +102,8 @@
   "begin": "はじめる",
   "finishMeasurement": "終了する",
   "measuringCalm": "そのまま、やさしく",
+  "analyzing": "解析しています…",
+  "analyzingSub": "今日のコンディションをまとめています",
   "resultTitle": "測定できました",
   "resultDuration": "測定時間",
   "resultSamples": "サンプル",
