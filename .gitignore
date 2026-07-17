@@ -18,8 +18,22 @@ app/ios/Runner/GoogleService-Info.plist
 # ---- Firmware (firmware/) ----
 firmware/Debug/
 firmware/Release/
+# CubeMX/CubeIDE生成物 (iocから再生成可能)
+firmware/Drivers/
+firmware/Core/Src/system_stm32l4xx.c
+firmware/Core/Src/stm32l4xx_hal_msp.c
+firmware/Core/Src/sysmem.c
+firmware/Core/Src/syscalls.c
+firmware/Core/Startup/
+firmware/STM32L452RETXP_FLASH.ld
+firmware/STM32L452RETXP_RAM.ld
+firmware/.mxproject
+firmware/.settings/
+# ホストテストバイナリ
 firmware/Tests/test_hpp
 firmware/Tests/test_dgs2_parser
+firmware/Tests/test_ring_buffer
+firmware/Tests/test_state_machine
 *.o
 *.elf
 *.map

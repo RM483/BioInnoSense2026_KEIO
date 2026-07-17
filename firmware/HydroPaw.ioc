@@ -2,7 +2,8 @@
 # HydroPaw firmware — Leafony AP03 (STM32L452RETxP)
 # 詳細な設定根拠は docs/04_stm32_spec.md 参照
 ADC1.Channel-0\#ChannelRegularConversion=ADC_CHANNEL_9
-ADC1.IPParameters=Rank-0\#ChannelRegularConversion,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,NbrOfConversionFlag
+ADC1.ClockPrescaler=ADC_CLOCK_SYNC_PCLK_DIV2
+ADC1.IPParameters=Rank-0\#ChannelRegularConversion,Channel-0\#ChannelRegularConversion,SamplingTime-0\#ChannelRegularConversion,NbrOfConversionFlag,ClockPrescaler
 ADC1.NbrOfConversionFlag=1
 ADC1.Rank-0\#ChannelRegularConversion=1
 ADC1.SamplingTime-0\#ChannelRegularConversion=ADC_SAMPLETIME_92CYCLES_5
@@ -14,6 +15,8 @@ IWDG.IPParameters=Prescaler,Reload
 IWDG.Prescaler=IWDG_PRESCALER_64
 IWDG.Reload=4095
 KeepUserPlacement=false
+LPUART1.BaudRate=115200
+LPUART1.IPParameters=BaudRate
 Mcu.CPN=STM32L452RETxP
 Mcu.Family=STM32L4
 Mcu.IP0=ADC1
@@ -107,9 +110,10 @@ ProjectManager.StackSize=0x800
 ProjectManager.TargetToolchain=STM32CubeIDE
 ProjectManager.ToolChainLocation=
 ProjectManager.UnderRoot=true
-ProjectManager.functionlistsort=1-SystemClock_Config-RCC-false-HAL-false,2-MX_GPIO_Init-GPIO-false-HAL-true,3-MX_USART1_UART_Init-USART1-false-HAL-true,4-MX_USART2_UART_Init-USART2-false-HAL-true,5-MX_ADC1_Init-ADC1-false-HAL-true,6-MX_IWDG_Init-IWDG-false-HAL-true
+ProjectManager.functionlistsort=1-SystemClock_Config-RCC-false-HAL-false,2-MX_GPIO_Init-GPIO-false-HAL-true,3-MX_USART1_UART_Init-USART1-false-HAL-true,4-MX_USART2_UART_Init-USART2-false-HAL-true,5-MX_ADC1_Init-ADC1-false-HAL-true,6-MX_IWDG_Init-IWDG-false-HAL-true,7-MX_LPUART1_UART_Init-LPUART1-false-HAL-true
 RCC.HSI_VALUE=16000000
-RCC.IPParameters=HSI_VALUE,LSE_VALUE,SYSCLKFreq_VALUE,SYSCLKSource
+RCC.IPParameters=HSI_VALUE,LSE_VALUE,SYSCLKFreq_VALUE,SYSCLKSource,USART2CLockSelection
+RCC.USART2CLockSelection=RCC_USART2CLKSOURCE_HSI
 RCC.LSE_VALUE=32768
 RCC.SYSCLKFreq_VALUE=16000000
 RCC.SYSCLKSource=RCC_SYSCLKSOURCE_HSI
