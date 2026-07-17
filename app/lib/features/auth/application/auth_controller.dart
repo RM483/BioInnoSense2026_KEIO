@@ -1,20 +1,18 @@
 /// 認証ViewModel。
-import 'package:firebase_auth/firebase_auth.dart';
+/// Firebaseの型はrepository層で吸収し、ここから上は AppUser のみを扱う
+/// (オフライン/テスト時は authRepositoryProvider の差し替えだけで完結する)。
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
-import '../../../core/firebase/firebase_providers.dart';
 import '../data/auth_repository.dart';
 import '../domain/app_user.dart';
 
-/// FirebaseAuthの生ストリーム(GoRouterのredirect用)
-final authStateChangesProvider = StreamProvider<User?>(
-  (ref) => ref.watch(firebaseAuthProvider).authStateChanges(),
-);
-
-/// domainエンティティとしての現在ユーザー
-final currentUserProvider = StreamProvider<AppUser?>(
+/// 現在ユーザーのストリーム (GoRouterのredirect・画面共通)
+final authStateChangesProvider = StreamProvider<AppUser?>(
   (ref) => ref.watch(authRepositoryProvider).watchAuthState(),
 );
+
+/// authStateChangesProviderの別名(可読性のため)
+final currentUserProvider = authStateChangesProvider;
 
 class AuthController extends AsyncNotifier<void> {
   @override

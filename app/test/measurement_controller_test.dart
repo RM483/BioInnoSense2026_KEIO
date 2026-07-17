@@ -2,12 +2,13 @@
 /// MockBleRepository(実機なし開発用と同一物)をDIし、
 /// 開始→データ蓄積→停止→保存 のセッション全体を検証する。
 import 'dart:async';
+import 'dart:typed_data';
 
-import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
-import 'package:hydropaw/core/firebase/firebase_providers.dart';
+import 'package:hydropaw/core/analytics/app_analytics.dart';
 import 'package:hydropaw/features/ble/data/ble_service.dart';
+import 'package:hydropaw/features/ble/data/hpp_codec.dart';
 import 'package:hydropaw/features/ble/data/mock_ble_repository.dart';
 import 'package:hydropaw/features/measurement/application/measurement_controller.dart';
 import 'package:hydropaw/features/measurement/data/measurement_repository.dart';
@@ -32,15 +33,6 @@ class _InMemoryMeasurementRepository implements MeasurementRepository {
       Stream.value(saved.isEmpty ? null : saved.last);
 }
 
-class _FakeAnalytics extends Fake implements FirebaseAnalytics {
-  @override
-  Future<void> logEvent({
-    required String name,
-    Map<String, Object?>? parameters,
-    AnalyticsCallOptions? callOptions,
-  }) async {}
-}
-
 void main() {
   late MockBleRepository ble;
   late _InMemoryMeasurementRepository repo;
@@ -52,7 +44,7 @@ void main() {
     container = ProviderContainer(overrides: [
       bleRepositoryProvider.overrideWithValue(ble),
       measurementRepositoryProvider.overrideWithValue(repo),
-      analyticsProvider.overrideWithValue(_FakeAnalytics()),
+      appAnalyticsProvider.overrideWithValue(const NoopAnalytics()),
     ]);
     await ble.connect('mock');
   });
@@ -108,5 +100,77 @@ void main() {
     await expectLater(controller.start(), throwsA(isA<Exception>()));
     expect(container.read(measurementControllerProvider).phase,
         MeasurePhase.error);
+  });
+
+  test('水素・温度・湿度が1Hzで更新され、値が妥当な範囲にある', () async {
+    final controller =
+        container.read(measurementControllerProvider.notifier);
+    await controller.start();
+    await Future<void>.delayed(const Duration(milliseconds: 3200));
+
+    final samples =
+        container.read(measurementControllerProvider).samples;
+    expect(samples.length, greaterThanOrEqualTo(3));
+    // 水素は変動している(完全同値でない)
+    expect(samples.map((s) => s.h2Ppb).toSet().length, greaterThan(1));
+    for (final s in samples) {
+      expect(s.h2Ppb, inInclusiveRange(0, 130000));
+      expect(s.tempC, inInclusiveRange(20.0, 30.0));
+      expect(s.rh, inInclusiveRange(35.0, 55.0));
+    }
+    // 経過時刻が単調増加
+    for (var i = 1; i < samples.length; i++) {
+      expect(samples[i].timeMs, greaterThan(samples[i - 1].timeMs));
+    }
+  });
+
+  test('EVT_SUMMARY欠損時はローカル統計で保存される(測定全損しない)', () async {
+    // サマリを返さないMockに差し替え
+    ble.dispose();
+    ble = MockBleRepository(seed: 7, emitSummary: false);
+    container.dispose();
+    container = ProviderContainer(overrides: [
+      bleRepositoryProvider.overrideWithValue(ble),
+      measurementRepositoryProvider.overrideWithValue(repo),
+      appAnalyticsProvider.overrideWithValue(const NoopAnalytics()),
+    ]);
+    await ble.connect('mock');
+
+    final controller =
+        container.read(measurementControllerProvider.notifier);
+    await controller.start();
+    await Future<void>.delayed(const Duration(milliseconds: 2500));
+
+    await controller.stopAndSave('dog-1', 'device-1');
+    final state = container.read(measurementControllerProvider);
+    expect(state.phase, MeasurePhase.saved); // サマリ喪失でもsaved
+    expect(repo.saved, hasLength(1));
+    final m = repo.saved.first;
+    expect(m.avgPpb, greaterThan(0)); // ローカル統計が算出されている
+    expect(m.maxPpb, greaterThanOrEqualTo(m.minPpb));
+    expect(m.series, isNotEmpty);
+  }, timeout: const Timeout(Duration(seconds: 30)));
+
+  test('再接続後: EVT_STATUS(測定中)でUIがmeasuringへ再同期する', () async {
+    final controller =
+        container.read(measurementControllerProvider.notifier);
+    await controller.start();
+    await Future<void>.delayed(const Duration(milliseconds: 1500));
+
+    // 切断相当でphaseがずれた状況を作る(FWからのEVT_ERROR受信)
+    ble.debugEmitFrame(
+        HppFrame(Hpp.evtError, 0, Uint8List.fromList([0x01, 0x00])));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+    expect(container.read(measurementControllerProvider).phase,
+        MeasurePhase.error);
+
+    // 再接続後のCMD_GET_STATUS応答: FW state=SM_MEASURING(3)
+    final p = Uint8List(12);
+    p[0] = 3; // SM_MEASURING
+    ble.debugEmitFrame(HppFrame(Hpp.evtStatus, 0, p));
+    await Future<void>.delayed(const Duration(milliseconds: 100));
+
+    expect(container.read(measurementControllerProvider).phase,
+        MeasurePhase.measuring);
   });
 }

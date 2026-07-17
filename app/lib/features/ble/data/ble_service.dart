@@ -5,22 +5,16 @@ import 'dart:async';
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../core/constants/ble_constants.dart';
 import '../../../core/error/app_exception.dart';
 import 'hpp_codec.dart';
 import 'mock_ble_repository.dart';
 
+export '../../../core/constants/ble_constants.dart' show BleUuids;
+
 /// `--dart-define=USE_MOCK_BLE=true` でモック(実機なし開発)へ切替。
 const bool kUseMockBle =
     bool.fromEnvironment('USE_MOCK_BLE', defaultValue: false);
-
-/// AC02仮想UARTサービスのUUID。
-/// NOTE: 実機のAC02ファームウェアで要確認。異なる場合はここだけ変更する。
-abstract final class BleUuids {
-  static final service = Guid('0179bbd0-5351-48b5-bf6d-2167639bc867');
-  static final tx = Guid('0179bbd1-5351-48b5-bf6d-2167639bc867'); // FW→App Notify
-  static final rx = Guid('0179bbd2-5351-48b5-bf6d-2167639bc867'); // App→FW Write
-  static const namePrefix = 'HydroPaw';
-}
 
 class ScannedDevice {
   const ScannedDevice({

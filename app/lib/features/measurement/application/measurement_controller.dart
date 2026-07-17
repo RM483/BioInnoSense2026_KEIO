@@ -2,11 +2,10 @@
 /// BLEフレームストリームを購読し、サンプル蓄積・統計・保存を担う。
 import 'dart:async';
 
-import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 
+import '../../../core/analytics/app_analytics.dart';
 import '../../../core/error/app_exception.dart';
-import '../../../core/firebase/firebase_providers.dart';
 import '../../ble/data/ble_service.dart';
 import '../../ble/data/hpp_codec.dart';
 import '../data/measurement_repository.dart';
@@ -111,8 +110,7 @@ class MeasurementController extends Notifier<MeasureState> {
       _listenFrames();
       await _sendWithAck(Hpp.cmdStartCont, [intervalS]);
       state = state.copyWith(phase: MeasurePhase.measuring);
-      unawaited(
-          ref.read(analyticsProvider).logEvent(name: 'measure_start'));
+      unawaited(ref.read(appAnalyticsProvider).logEvent('measure_start'));
     } on AppException {
       state = state.copyWith(phase: MeasurePhase.error);
       rethrow;
@@ -189,9 +187,8 @@ class MeasurementController extends Notifier<MeasureState> {
 
       await ref.read(measurementRepositoryProvider).save(dogId, m);
       state = state.copyWith(phase: MeasurePhase.saved, summary: m);
-      unawaited(ref
-          .read(analyticsProvider)
-          .logEvent(name: 'measure_complete', parameters: {
+      unawaited(
+          ref.read(appAnalyticsProvider).logEvent('measure_complete', {
         'duration_s': m.durationS,
         'avg_ppb': m.avgPpb,
         'dropped_frames': state.droppedFrames,

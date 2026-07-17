@@ -8,6 +8,7 @@ import 'dart:async';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:flutter/foundation.dart' show visibleForTesting;
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 import '../../../core/error/app_exception.dart';
@@ -15,9 +16,14 @@ import 'ble_service.dart';
 import 'hpp_codec.dart';
 
 class MockBleRepository implements BleRepository {
-  MockBleRepository({this.seed});
+  MockBleRepository({this.seed, this.emitSummary = true});
 
   final int? seed;
+
+  /// falseにするとCMD_STOPでEVT_SUMMARYを返さない
+  /// (サマリ喪失時のローカル統計フォールバックのテスト用)。
+  final bool emitSummary;
+
   late final _rng = Random(seed);
 
   final _frameController = StreamController<HppFrame>.broadcast();
@@ -92,7 +98,7 @@ class MockBleRepository implements BleRepository {
         _startStream();
       case Hpp.cmdStop:
         _ack(type);
-        _emitSummary();
+        if (emitSummary) _emitSummary();
         _stopStream();
       case Hpp.cmdSingle:
         _ack(type);
@@ -115,6 +121,11 @@ class MockBleRepository implements BleRepository {
     _frameController.close();
     _stateController.close();
   }
+
+  /// テスト専用: 任意のフレームを受信ストリームへ注入する
+  /// (再接続後のEVT_STATUS再同期などの検証に使用)。
+  @visibleForTesting
+  void debugEmitFrame(HppFrame frame) => _frameController.add(frame);
 
   // ---- 内部 ----
 

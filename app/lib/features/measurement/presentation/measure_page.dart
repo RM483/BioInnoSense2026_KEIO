@@ -71,6 +71,7 @@ class MeasurePage extends ConsumerWidget {
                 style: AppText.display.copyWith(color: valueColor),
                 child: Text(
                   latest == null ? '––' : currentPpm.toStringAsFixed(1),
+                  key: const ValueKey('h2-value'),
                 ),
               ),
               const SizedBox(height: 6),
