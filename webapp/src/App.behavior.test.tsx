@@ -1,6 +1,7 @@
 /**
  * App動作検証 (jsdom + MockProvider実物)。
- * 「実際に動くこと」の確認: 接続→測定→1Hz更新→停止→履歴。
+ * 「意味が主役」のプロダクト体験: ホーム→測定→ライブ更新→終了→
+ * ホームに意味の言葉と履歴が反映される、までを実行して確認する。
  *   npx vitest run
  */
 // @vitest-environment jsdom
@@ -21,81 +22,74 @@ describe('HydroPaw Web (MockProvider)', () => {
     vi.useFakeTimers()
   })
 
-  it('接続→測定開始で水素濃度が1秒毎に更新され、温湿度・電池・状態も表示される', async () => {
+  it('ホームは意味の言葉が主役 → 測定中は状態+小さなppm → 終了で履歴と評価に反映', async () => {
     render(<App />)
 
-    // 初期状態
-    expect(screen.getByText('未接続')).toBeTruthy()
-    expect(document.querySelector('.hero .value')!.textContent).toBe('––')
+    // 初期ホーム: 専門用語ではなく促しの言葉
+    expect(screen.getByText('はじめての測定をしてみましょう')).toBeTruthy()
+    expect(screen.getAllByText('未接続').length).toBeGreaterThan(0)
+    expect(document.querySelector('.metric')).toBeNull() // 数値タイルは無い
 
-    // 接続 (Mockは700ms遅延)
-    fireEvent.click(screen.getByText('デバイスに接続'))
-    await tick(10)
-    expect(screen.getByText('接続処理中…')).toBeTruthy() // 接続中の状態表示
-    await tick(800)
-    expect(screen.getByText('接続中')).toBeTruthy()
-
-    // 測定開始
+    // 測定開始(未接続なら自動で接続してから開始)
     fireEvent.click(screen.getByText('測定をはじめる'))
-    await tick(100) // ACK
-    expect(screen.getByText('停止')).toBeTruthy()
-
-    // 1秒毎の更新: 現在値が '––' でなくなる
-    await tick(1100)
-    const value1 = document.querySelector('.hero .value')!.textContent!
-    expect(value1).not.toBe('––')
-    expect(screen.getByText('ウォームアップ中（参考値）')).toBeTruthy()
-
-    // さらに2秒 → 値が変化(1Hz更新)
-    await tick(2100)
-    const value2 = document.querySelector('.hero .value')!.textContent!
-    expect(value2).not.toBe(value1)
-
-    // 温度・湿度・電池の表示
-    const nums = [...document.querySelectorAll('.metric .num')].map(
-      (e) => e.textContent,
-    )
-    expect(nums).toHaveLength(4)
-    // 最大/温度/湿度は表示中 (平均はウォームアップ60s間は参考値扱いで '––')
-    expect(nums.slice(1).every((n) => n && n !== '––')).toBe(true)
-    const battery = [...document.querySelectorAll('.kv .row')].find((r) =>
-      r.textContent!.includes('電池'),
-    )!
-    expect(battery.textContent).toMatch(/\d+%/)
-    // デバイス状態
+    await tick(10)
+    expect(screen.getByText('接続しています…')).toBeTruthy()
+    await tick(900) // 接続700ms + ACK
+    expect(screen.getByText('接続中')).toBeTruthy()
     expect(screen.getByText('測定中')).toBeTruthy()
 
-    // グラフがリアルタイム描画されている (SVG path が伸びる)
+    // ライブ更新: 状態の言葉 + 小さなppm
+    await tick(1100)
+    const ppm1 = document.querySelector('.value-sub')!.textContent!
+    expect(ppm1).toMatch(/ppm/)
+    expect(screen.getByText('ウォームアップ中（参考値）')).toBeTruthy()
+    expect(['安定', 'やや高め', '高め']).toContain(
+      document.querySelector('.live .phrase')!.textContent,
+    )
+
+    // 1Hzで値が動く
+    await tick(2100)
+    const ppm2 = document.querySelector('.value-sub')!.textContent!
+    expect(ppm2).not.toBe(ppm1)
+
+    // グラフが伸びる
     const d1 = document.querySelector('svg path[stroke]')!.getAttribute('d')!
     await tick(2100)
     const d2 = document.querySelector('svg path[stroke]')!.getAttribute('d')!
     expect(d2.length).toBeGreaterThan(d1.length)
 
-    // 停止 → 履歴に1件追加
-    fireEvent.click(screen.getByText('停止'))
+    // 終了 → ホームへ戻り、意味の言葉 + 履歴 + 最終測定時刻
+    fireEvent.click(screen.getByText('終了する'))
     await tick(200)
     expect(screen.getByText('測定をはじめる')).toBeTruthy()
     expect(document.querySelectorAll('.history-item').length).toBe(1)
+    expect(
+      ['今日は安定しています', '少し高めです。様子を見ましょう', '高めの値が続いています'],
+    ).toContain(document.querySelector('.hero .phrase')!.textContent)
+    expect(document.querySelector('.last-measured')!.textContent).toContain(
+      '最終測定',
+    )
 
-    // 切断 → 未接続表示
-    fireEvent.click(screen.getByText('切断'))
-    await tick(100)
-    expect(screen.getByText('未接続')).toBeTruthy()
-    expect(screen.getByText('デバイスに接続')).toBeTruthy()
+    // 技術情報(温湿度・電池)は「詳細」カードに隔離されている
+    const details = document.querySelector('.details')!
+    expect(details.textContent).toMatch(/温度/)
+    expect(details.textContent).toMatch(/電池.*\d+%/)
   }, 15000)
 
-  it('履歴はlocalStorageに保存され、リロード後も表示される', async () => {
+  it('履歴はlocalStorageに保存され、リロード後も評価が表示される', async () => {
     render(<App />)
-    fireEvent.click(screen.getByText('デバイスに接続'))
-    await tick(800)
     fireEvent.click(screen.getByText('測定をはじめる'))
+    await tick(900)
     await tick(3300)
-    fireEvent.click(screen.getByText('停止'))
+    fireEvent.click(screen.getByText('終了する'))
     await tick(200)
     expect(document.querySelectorAll('.history-item').length).toBe(1)
 
     cleanup()
     render(<App />) // リロード相当
     expect(document.querySelectorAll('.history-item').length).toBe(1)
+    expect(document.querySelector('.hero .phrase')!.textContent).not.toBe(
+      'はじめての測定をしてみましょう',
+    )
   })
 })
