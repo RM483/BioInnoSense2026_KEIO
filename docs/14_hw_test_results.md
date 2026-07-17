@@ -101,11 +101,12 @@ DGS2ロット・SN: ____ / AC02: ____ / 実施者: ____
 
 | 項目 | 現在の暫定値/仮定 | 確定に必要なテスト | 確定後に更新する箇所 |
 |---|---|---|---|
-| AC02仮想UARTサービスUUID | `0179bbd0-…`(未確認の仮値) | T3 | `app/lib/core/constants/ble_constants.dart` / `webapp/src/providers/BleProvider.ts` |
-| Leafonyバス実ピン対応 | docs/04の表どおりと仮定 | T1 | `firmware/HydroPaw.ioc` / `Core/Inc/main.h` |
-| 電池分圧比・VREF | 1/2分圧・VREF=3.3V固定 | T1 | `firmware/App/Src/power.c` 換算係数 |
+| AC02 GATT UUID | **公式標準ファーム値が判明**: `442f1570/71/72-8a00-9a28-cbe1-e1d4212d53eb`, notifyハンドル0x000C (docs/15) — コード内はまだ旧仮値 | T3(個体のファームが標準のままかの確認のみ) | `app/lib/core/constants/ble_constants.dart` / `webapp/src/providers/BleProvider.ts` |
+| Leafonyバス⇔ポート対応 | **公式確定**(docs/15 §1)。ただし現FWはAC02 UART/デバッグUARTの割当が公式と不一致(docs/15 §2-B) | 修正後T1(外部配線C1〜C5と物理D1〜D3のみ実機) | `firmware/HydroPaw.ioc` / `Core/Inc/main.h` / `main.c` |
+| AC02プロトコル・速度 | **公式確定**: BGAPI(BGLib) @9600bps — 現FWの透過UART@115200は不成立(docs/15 §2-B4) | 設計変更後T3 | `firmware/App/Src/ble_link.c` 下位層ほか |
+| 電池分圧比・VREF | 1/2分圧・VREF=3.3V固定(**外部配線情報が不足** — AV0xはアナログ出力なし) | 自作リーフ回路確認+T1 | `firmware/App/Src/power.c` 換算係数 |
 | DGS2実ロットのCSV | データシートRev24aの7列と仮定 | T2 | `firmware/App/Src/dgs2.c` パーサ |
-| STOP2復帰時のUART欠損量 | 「1フレーム目喪失があり得る」と仮定(再送で吸収) | T6b | 必要時のみアプリにWakeプリアンブル追加 |
+| STOP2復帰時のUART欠損量 | 「1フレーム目喪失があり得る」と仮定(再送で吸収)。**UART4のStop wakeup対応自体がUNKNOWN**(docs/15 §3-3) | RM0394確認+T6b | 必要時のみwake方式変更 |
 
 ## 個別記録
 
