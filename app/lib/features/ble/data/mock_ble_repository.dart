@@ -10,6 +10,7 @@ import 'dart:typed_data';
 
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
+import '../../../core/error/app_exception.dart';
 import 'ble_service.dart';
 import 'hpp_codec.dart';
 
