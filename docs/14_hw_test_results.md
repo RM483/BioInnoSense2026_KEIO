@@ -5,6 +5,47 @@
 - FAIL時: 問題内容→修正コミット→再テスト結果 の順に必ず埋める。
 - ログ抜粋はLPUART1の該当行をそのまま貼る。
 
+## 数値の区分 (必須)
+
+本ファイルに書く全ての数値には次の区分を付ける:
+
+- **MEASURED** — 実機またはビルド成果物から取得した値
+- **ESTIMATED** — コード・仕様からの推定値
+- **UNKNOWN** — 確認できていない値
+
+**ESTIMATED / UNKNOWN はPASS判定の根拠にできない。** 実測が完了する
+まで該当テストは「未確認」を維持する。
+
+## 計測値レジスタ (未実測項目の現況)
+
+| 項目 | 区分 | 現在の値(推定含む) | 実測タイミング |
+|---|---|---|---|
+| flash使用量 (Debug/Release) | UNKNOWN | — (差分のみESTIMATED: Debug +2〜6KB) | D0-2 |
+| RAM使用量 (Debug/Release) | UNKNOWN | — (静的差分のみESTIMATED: +約8B) | D0-2 |
+| 最大スタック使用量 | UNKNOWN | — (LOG経路のみESTIMATED: <1KB) | D0 |
+| ログによるBLE送信遅延 | ESTIMATED | ≈0ms(送信後ログへ修正済み・未実測) | D0/T3 |
+| STOP2移行遅延 | ESTIMATED | +約1.3ms(ログ13B送出) | D0/T6 |
+| 最長メインループ時間 | ESTIMATED | <10ms | D0 |
+| IWDG更新間隔(最悪値) | ESTIMATED | <10ms(=最長ループ) | D0 |
+| 復帰後の初回UART受信タイミング | UNKNOWN | — | T6b |
+
+## 最初のベンチ作業チェックリスト (D0+T0)
+
+順番に実施し、各行の「記録」を埋める。全行合格でT0=PASS。
+
+| # | 作業 | 記録すべき値 | 合格条件 |
+|---|---|---|---|
+| 1 | STM32CubeIDEでDebugビルド | FWコミットID: ____ / エラー0・警告数: ____ | エラー0でビルド完了 |
+| 2 | Build Analyzerまたは`arm-none-eabi-size`でサイズ記録 | flash(text+data): D ____ / R ____ ・ RAM(data+bss): D ____ / R ____ (区分=MEASURED) | 両構成の数値が取得でき、flash≤512KB・RAM≤160KBに収まる |
+| 3 | 書込み前にボード・電源・配線を確認 | 基板刻印(AP03/STM32L452RETxP)写真 / 電源電圧実測: ____V / 配線写真 | 刻印一致・電圧2.6〜3.6V・配線がdocs/04の表と一致 |
+| 4 | ST-Linkで書込み | CubeIDE書込みログ(Verify結果): ____ | Download verified successfully |
+| 5 | LPUART1ログを取得(115200 8N1) | 端末設定スクリーンショット / ログファイル名: ____ | `HydroPaw FW v1.x boot` が文字化けなく読める |
+| 6 | reset cause / optbytes の行を保存 | 該当2行の原文: ____ | 初回のみ `reset cause: … OPTBYTE` を含む再起動1回、最終的に `optbytes: IWDG FROZEN in stop` |
+| 7 | 意図しないリセットがないか30秒観察 | 30秒間の追加 `boot` 行数: ____ | 追加boot行=0(リセットループなし) |
+| 8 | 電源再投入して同じ観察を計3回 | 各回の `reset cause:` 原文(3回分): ____ | 2回目以降にOPTBYTE/IWDGが現れず、毎回 `FROZEN` 表示 |
+| 9 | 本ファイルのD0/T0欄へ記録 | 記入完了チェック: ☐ / ログ添付: ☐ | 全数値にMEASURED区分が付いている |
+| 10 | T0判定 | 判定: ____ / 日付: ____ | #1〜#9すべて合格 → T0=PASS。**PASS後にのみT1へ進む** |
+
 ## 進行ルール
 
 1. **1テストずつ**実施し、完了ごとに本ファイルへ記録する。
