@@ -1,0 +1,49 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    // Flutter Gradle Plugin は Android/Kotlin プラグインの後に適用する
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+android {
+    namespace = "jp.keio.hydropaw"
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = flutter.ndkVersion
+
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = JavaVersion.VERSION_17.toString()
+    }
+
+    defaultConfig {
+        // Firebaseコンソール / flutterfire configure のAndroidアプリ登録と
+        // 一致させること (docs/06)。
+        applicationId = "jp.keio.hydropaw"
+        // firebase_auth / flutter_blue_plus の要件により 23 以上
+        minSdk = 23
+        targetSdk = flutter.targetSdkVersion
+        versionCode = flutter.versionCode
+        versionName = flutter.versionName
+    }
+
+    buildTypes {
+        release {
+            // TODO: リリース署名は key.properties を用意して差し替える
+            signingConfig = signingConfigs.debug
+        }
+    }
+}
+
+flutter {
+    source = "../.."
+}
+
+// google-services.json が配置されている場合のみFirebaseプラグインを適用する。
+// (未配置でもDebugビルド可能 — アプリはMock/オフラインモードで起動する)
+if (file("google-services.json").exists()) {
+    apply plugin: "com.google.gms.google-services"
+}

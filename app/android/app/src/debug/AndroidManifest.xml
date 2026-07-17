@@ -1,0 +1,4 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Flutterのデバッグ機能(ホットリロード等)に必要 -->
+    <uses-permission android:name="android.permission.INTERNET" />
+</manifest>
