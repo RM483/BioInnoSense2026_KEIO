@@ -38,6 +38,10 @@ firmware/Tests/test_state_machine
 *.elf
 *.map
 
+# ---- Web (webapp/) ----
+webapp/node_modules/
+webapp/dist/
+
 # ---- Firebase Functions ----
 firebase/functions/node_modules/
 firebase/functions/lib/
