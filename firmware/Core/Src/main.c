@@ -93,6 +93,18 @@ static void sensor_uart_tx(const uint8_t *data, size_t len)
 
 static void ble_uart_tx(const uint8_t *data, size_t len)
 {
+#ifndef HYDROPAW_LOG_DISABLE
+    /* 送信フレームの種別/SEQを可視化(EVT_ERRORはコードも) */
+    if (len >= HPP_HEADER_SIZE && data[0] == HPP_SOF) {
+        if (data[2] == HPP_EVT_ERROR && len >= HPP_HEADER_SIZE + 2U) {
+            LOG("BLE tx EVT_ERROR code=%02X detail=%02X seq=%u",
+                data[5], data[6], data[3]);
+        } else {
+            LOG("BLE tx type=%02X seq=%u len=%u",
+                data[2], data[3], (unsigned)data[4]);
+        }
+    }
+#endif
     HAL_UART_Transmit(&huart2, (uint8_t *)data, (uint16_t)len, 100);
 }
 
@@ -100,6 +112,23 @@ static void debug_uart_tx(const uint8_t *data, size_t len)
 {
     HAL_UART_Transmit(&hlpuart1, (uint8_t *)data, (uint16_t)len, 20);
 }
+
+#ifndef HYDROPAW_LOG_DISABLE
+/* ---- 実機テスト用診断ログ (Debugビルドのみ / docs/13参照) ---- */
+
+/** 起動理由(IWDGリセット・オプションバイト再ロード等)をログして旗をクリア */
+static void log_reset_cause(void)
+{
+    LOG("reset cause:%s%s%s%s%s%s",
+        __HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST) ? " IWDG" : "",
+        __HAL_RCC_GET_FLAG(RCC_FLAG_WWDGRST) ? " WWDG" : "",
+        __HAL_RCC_GET_FLAG(RCC_FLAG_OBLRST) ? " OPTBYTE" : "",
+        __HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST) ? " SOFT" : "",
+        __HAL_RCC_GET_FLAG(RCC_FLAG_BORRST) ? " BOR" : "",
+        __HAL_RCC_GET_FLAG(RCC_FLAG_PINRST) ? " PIN" : "");
+    __HAL_RCC_CLEAR_RESET_FLAGS();
+}
+#endif
 /* USER CODE END 0 */
 
 /**
@@ -144,6 +173,11 @@ int main(void)
   /* USER CODE BEGIN 2 */
   log_init(debug_uart_tx);
   LOG("HydroPaw FW v%u.%u boot", FW_VERSION_MAJOR, FW_VERSION_MINOR);
+#ifndef HYDROPAW_LOG_DISABLE
+  log_reset_cause();
+  LOG("optbytes: IWDG %s in stop",
+      power_iwdg_frozen_in_stop() ? "FROZEN" : "RUNNING(!)");
+#endif
 
   /* ADCは初回変換前にキャリブレーション必須(L4リファレンスマニュアル) */
   if (HAL_ADCEx_Calibration_Start(&hadc1, ADC_SINGLE_ENDED) != HAL_OK) {
@@ -178,6 +212,16 @@ int main(void)
     char line[DGS2_LINE_MAX];
     while (rb_pop(&rb_sensor, &b)) {
         if (dgs2_feed(&g_sensor, b, line, sizeof(line))) {
+#ifndef HYDROPAW_LOG_DISABLE
+            /* 受信CSVの列数とパース可否(ロット差・配線不良の一次切り分け) */
+            int cols = 1;
+            for (const char *c = line; *c != '\0'; c++) {
+                if (*c == ',') cols++;
+            }
+            dgs2_sample_t dbg;
+            LOG("DGS2 rx cols=%d parse=%s", cols,
+                dgs2_parse_line(line, &dbg) == APP_OK ? "OK" : "FAIL");
+#endif
             sm_on_sensor_line(&g_sm, line, now);
         }
     }
@@ -196,6 +240,16 @@ int main(void)
     /* 状態遷移ログ (デバッグ用, LPUART1) */
     if (g_sm.state != logged_state) {
         LOG("state %d -> %d", (int)logged_state, (int)g_sm.state);
+#ifndef HYDROPAW_LOG_DISABLE
+        /* センサ初期化の成否を明示 */
+        if (logged_state == SM_SENSOR_INIT) {
+            if (g_sm.state == SM_IDLE) {
+                LOG("sensor init OK sn=%s", g_sm.sensor_sn);
+            } else if (g_sm.state == SM_ERROR) {
+                LOG("sensor init FAILED (no response)");
+            }
+        }
+#endif
         logged_state = g_sm.state;
     }
 
