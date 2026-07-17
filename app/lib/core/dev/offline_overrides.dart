@@ -111,6 +111,9 @@ class InMemoryMeasurementRepository implements MeasurementRepository {
   final _items = <Measurement>[];
   int _nextId = 1;
 
+  /// テスト・デバッグ用: 保存済み一覧(新しい順)
+  List<Measurement> get saved => List.unmodifiable(_items);
+
   @override
   Future<String> save(String dogId, Measurement m) async {
     final saved = m.copyWith(id: 'm-${_nextId++}');

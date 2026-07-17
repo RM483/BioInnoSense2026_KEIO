@@ -30,6 +30,7 @@ dependencies:
   # BLE
   flutter_blue_plus: ^1.32.12
   # UI
+  cupertino_icons: ^1.0.8
   fl_chart: ^0.68.0
   image_picker: ^1.1.2
   intl: any

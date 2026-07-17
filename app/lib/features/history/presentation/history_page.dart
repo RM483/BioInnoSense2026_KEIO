@@ -1,13 +1,16 @@
-/// 履歴画面。日付降順リスト + スパークライン。
+/// 履歴 — 日々の記録を「状態の言葉」で振り返る。
+/// 数値の詳細はタップした先(詳細画面)に置く。
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../../core/constants/h2.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../dogs/application/dog_controller.dart';
+import '../../insights/domain/health_assessment.dart';
+import '../../insights/presentation/assessment_style.dart';
 import '../../measurement/data/measurement_repository.dart';
 import '../../measurement/domain/measurement.dart';
 
@@ -58,55 +61,147 @@ class HistoryPage extends ConsumerWidget {
     final history = ref.watch(historyProvider);
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.history)),
-      body: history.when(
-        loading: () => Center(
-          child: SizedBox(
-            width: 28,
-            height: 28,
-            child: CircularProgressIndicator(
-                strokeWidth: 2.2, color: p.textTertiary),
+      body: SafeArea(
+        child: history.when(
+          loading: () => Center(
+            child: SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(
+                  strokeWidth: 2.2, color: p.textTertiary),
+            ),
+          ),
+          error: (e, _) => Center(
+            child: Text(l10n.errorNetwork,
+                style: AppText.body.copyWith(color: p.textSecondary)),
+          ),
+          data: (items) => NotificationListener<ScrollEndNotification>(
+            onNotification: (n) {
+              if (n.metrics.extentAfter < 200) {
+                ref.read(historyProvider.notifier).loadMore();
+              }
+              return false;
+            },
+            child: ListView(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              children: [
+                Text(l10n.tabHistory,
+                    style:
+                        AppText.largeTitle.copyWith(color: p.textPrimary)),
+                const SizedBox(height: 20),
+                if (items.isEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 120),
+                    child: Column(
+                      children: [
+                        Icon(Icons.timeline,
+                            size: 30, color: p.textTertiary),
+                        const SizedBox(height: 12),
+                        Text(l10n.noMeasurementYet,
+                            style: AppText.body
+                                .copyWith(color: p.textSecondary)),
+                      ],
+                    ),
+                  )
+                else ...[
+                  if (items.length >= 2) ...[
+                    _TrendChartCard(items: items, l10n: l10n),
+                    const SizedBox(height: 14),
+                  ],
+                  for (final m in items) ...[
+                    _HistoryRow(measurement: m),
+                    const SizedBox(height: 10),
+                  ],
+                ],
+              ],
+            ),
           ),
         ),
-        error: (e, _) => Center(
-          child: Text(l10n.errorNetwork,
-              style: AppText.body.copyWith(color: p.textSecondary)),
-        ),
-        data: (items) => items.isEmpty
-            ? Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(Icons.timeline, size: 32, color: p.textTertiary),
-                    const SizedBox(height: 14),
-                    Text(l10n.noMeasurementYet,
-                        style: AppText.body
-                            .copyWith(color: p.textSecondary)),
-                  ],
-                ),
-              )
-            : NotificationListener<ScrollEndNotification>(
-                onNotification: (n) {
-                  if (n.metrics.extentAfter < 200) {
-                    ref.read(historyProvider.notifier).loadMore();
-                  }
-                  return false;
-                },
-                child: ListView.separated(
-                  padding: const EdgeInsets.all(24),
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 10),
-                  itemBuilder: (context, i) =>
-                      _HistoryTile(measurement: items[i]),
-                ),
-              ),
       ),
     );
   }
 }
 
-class _HistoryTile extends StatelessWidget {
-  const _HistoryTile({required this.measurement});
+/// 直近の平均値の推移(数値ラベルは最小限)。
+class _TrendChartCard extends StatelessWidget {
+  const _TrendChartCard({required this.items, required this.l10n});
+
+  final List<Measurement> items; // 新しい順
+  final AppLocalizations l10n;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final series = items.take(14).toList().reversed.toList();
+    final spots = [
+      for (var i = 0; i < series.length; i++)
+        FlSpot(i.toDouble(), series[i].avgPpm),
+    ];
+    final maxY = [
+      HealthAssessment.stableMaxPpm * 1.4,
+      ...series.map((m) => m.avgPpm * 1.15),
+    ].reduce((a, b) => a > b ? a : b);
+
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(l10n.recentTrend.toUpperCase(),
+              style: AppText.overline.copyWith(color: p.textTertiary)),
+          const SizedBox(height: 14),
+          SizedBox(
+            height: 120,
+            child: LineChart(
+              LineChartData(
+                minY: 0,
+                maxY: maxY,
+                gridData: FlGridData(
+                  drawVerticalLine: false,
+                  horizontalInterval: maxY / 2,
+                  getDrawingHorizontalLine: (_) =>
+                      FlLine(color: p.hairline, strokeWidth: 1),
+                ),
+                titlesData: const FlTitlesData(show: false),
+                borderData: FlBorderData(show: false),
+                lineTouchData: const LineTouchData(enabled: false),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.3,
+                    barWidth: 2,
+                    color: p.accent,
+                    dotData: FlDotData(
+                      show: true,
+                      checkToShowDot: (spot, _) =>
+                          spot.x == spots.last.x, // 最新点のみ
+                      getDotPainter: (_, __, ___, ____) =>
+                          FlDotCirclePainter(
+                        radius: 3,
+                        color: p.accent,
+                        strokeWidth: 2,
+                        strokeColor: p.card,
+                      ),
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      color: p.accent.withOpacity(0.06),
+                    ),
+                  ),
+                ],
+              ),
+              duration: const Duration(milliseconds: 400),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryRow extends StatelessWidget {
+  const _HistoryRow({required this.measurement});
   final Measurement measurement;
 
   @override
@@ -114,73 +209,41 @@ class _HistoryTile extends StatelessWidget {
     final l10n = AppLocalizations.of(context)!;
     final p = context.palette;
     final m = measurement;
-    final isHigh = m.avgPpm >= H2.highPpm;
+    final level = HealthAssessment.levelForPpm(m.avgPpm);
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final df = DateFormat.MMMEd(locale);
-    final tf = DateFormat.Hm(locale);
 
     return AppCard(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      onTap: () => context.go('/history/detail', extra: m),
       child: Row(
         children: [
+          Container(
+            width: 8,
+            height: 8,
+            decoration: BoxDecoration(
+                color: level.color(p), shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                Text(level.shortLabel(l10n),
+                    style: AppText.bodyMedium
+                        .copyWith(color: p.textPrimary)),
+                const SizedBox(height: 2),
                 Text(
-                    '${df.format(m.startedAt)}  ${tf.format(m.startedAt)}',
-                    style:
-                        AppText.caption.copyWith(color: p.textTertiary)),
-                const SizedBox(height: 8),
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.baseline,
-                  textBaseline: TextBaseline.alphabetic,
-                  children: [
-                    Text(m.avgPpm.toStringAsFixed(1),
-                        style: AppText.numeral.copyWith(
-                            fontSize: 24,
-                            color: isHigh ? p.warn : p.textPrimary)),
-                    const SizedBox(width: 5),
-                    Text(l10n.ppm,
-                        style: AppText.caption
-                            .copyWith(color: p.textTertiary)),
-                  ],
+                  '${DateFormat.MMMEd(locale).format(m.startedAt)} '
+                  '${DateFormat.Hm(locale).format(m.startedAt)}',
+                  style: AppText.caption.copyWith(color: p.textTertiary),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                    '${l10n.peak} ${m.maxPpm.toStringAsFixed(1)} · '
-                    '${m.durationS ~/ 60}min',
-                    style:
-                        AppText.caption.copyWith(color: p.textSecondary)),
               ],
             ),
           ),
-          // スパークライン
-          if (m.series.isNotEmpty)
-            SizedBox(
-              width: 92,
-              height: 40,
-              child: LineChart(
-                LineChartData(
-                  gridData: const FlGridData(show: false),
-                  titlesData: const FlTitlesData(show: false),
-                  borderData: FlBorderData(show: false),
-                  lineTouchData: const LineTouchData(enabled: false),
-                  lineBarsData: [
-                    LineChartBarData(
-                      spots: [
-                        for (final s in m.series)
-                          FlSpot(s.timeMs / 1000.0, s.h2Ppm),
-                      ],
-                      isCurved: true,
-                      barWidth: 1.5,
-                      color: isHigh ? p.warn : p.accent,
-                      dotData: const FlDotData(show: false),
-                    ),
-                  ],
-                ),
-              ),
-            ),
+          Text('${m.avgPpm.toStringAsFixed(1)} ${l10n.ppm}',
+              style: AppText.caption.copyWith(color: p.textTertiary)),
+          const SizedBox(width: 6),
+          Icon(Icons.chevron_right, size: 16, color: p.textTertiary),
         ],
       ),
     );

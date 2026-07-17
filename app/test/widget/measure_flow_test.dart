@@ -1,5 +1,5 @@
-/// 測定フローのWidgetテスト (MockBleRepositoryを実物として使用)。
-/// FakeAsync下でMockのタイマーを進めながらUIを検証する。
+/// 測定フロー(開始→測定中→結果)のWidgetテスト。
+/// MockBleRepositoryを実物として使い、FakeAsync下でタイマーを進めて検証する。
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -16,7 +16,9 @@ import 'package:hydropaw/features/dogs/domain/dog.dart';
 import 'package:hydropaw/features/error/presentation/error_page.dart';
 import 'package:hydropaw/features/home/presentation/home_page.dart';
 import 'package:hydropaw/features/measurement/data/measurement_repository.dart';
-import 'package:hydropaw/features/measurement/presentation/measure_page.dart';
+import 'package:hydropaw/features/measurement/presentation/measure_start_page.dart';
+import 'package:hydropaw/features/measurement/presentation/measuring_page.dart';
+import 'package:hydropaw/features/measurement/presentation/result_page.dart';
 import 'package:hydropaw/l10n/app_localizations.dart';
 
 Widget harness({
@@ -30,7 +32,13 @@ Widget harness({
     initialLocation: initialLocation,
     routes: [
       GoRoute(path: '/home', builder: (_, __) => const HomePage()),
-      GoRoute(path: '/measure', builder: (_, __) => const MeasurePage()),
+      GoRoute(
+          path: '/measure', builder: (_, __) => const MeasureStartPage()),
+      GoRoute(
+          path: '/measure/session',
+          builder: (_, __) => const MeasuringPage()),
+      GoRoute(
+          path: '/measure/result', builder: (_, __) => const ResultPage()),
       GoRoute(
           path: '/error',
           builder: (_, s) =>
@@ -65,7 +73,7 @@ Widget harness({
   );
 }
 
-/// FakeAsync下でMockの遅延(接続700ms等)を完了させるヘルパ
+/// FakeAsync下でMockの遅延(接続700ms等)とUI更新を進めるヘルパ
 Future<void> settle(WidgetTester tester, Duration d) async {
   await tester.pump(d);
   await tester.pump();
@@ -84,7 +92,7 @@ void main() {
 
   Future<void> connectBle(WidgetTester tester) async {
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(MeasurePage)));
+        tester.element(find.byType(MeasureStartPage)));
     final f =
         container.read(bleControllerProvider.notifier).connect('mock-1');
     await settle(tester, const Duration(milliseconds: 800));
@@ -92,128 +100,140 @@ void main() {
     await tester.pump();
   }
 
-  testWidgets('Mockデータが測定画面に表示され、値が更新される', (tester) async {
-    await dogs.addDog(const Dog(id: '', name: 'ポチ'));
-    await tester.pumpWidget(
-        harness(ble: ble, dogs: dogs, measurements: measurements));
-    await tester.pump();
-
-    await connectBle(tester);
-    expect(find.text('接続中'), findsOneWidget);
-
-    // 測定開始
-    await tester.tap(find.text('測定をはじめる'));
-    await settle(tester, const Duration(milliseconds: 100)); // ACK
-    // 2サンプル分進める
-    await settle(tester, const Duration(milliseconds: 1100));
-    await settle(tester, const Duration(milliseconds: 1100));
-
-    expect(find.text('––'), findsNothing); // 現在値が表示されている
-    expect(find.text('停止'), findsOneWidget);
-    expect(find.textContaining('ウォームアップ'), findsOneWidget);
-
-    // さらに1秒進めると値が更新される
-    final before =
-        tester.widget<Text>(find.byKey(const ValueKey('h2-value'))).data;
-    await settle(tester, const Duration(milliseconds: 1100));
-    final after =
-        tester.widget<Text>(find.byKey(const ValueKey('h2-value'))).data;
-    expect(after, isNot('––'));
-    expect(after == before, isFalse); // 値が動いている
-
-    // 後始末(タイマー停止)
-    final container = ProviderScope.containerOf(
-        tester.element(find.byType(MeasurePage)));
-    final stop = container
-        .read(bleControllerProvider.notifier)
-        .disconnect();
-    await settle(tester, const Duration(milliseconds: 100));
-    await stop;
-  });
-
-  testWidgets('犬未登録では開始できず、登録導線が出る(クラッシュしない)', (tester) async {
-    await tester.pumpWidget(
-        harness(ble: ble, dogs: dogs, measurements: measurements));
-    await tester.pump();
-    await connectBle(tester);
-
-    final button = tester.widget<FilledButton>(
-        find.widgetWithText(FilledButton, '測定をはじめる'));
-    expect(button.onPressed, isNull); // 開始不可(空dogId保存が起き得ない)
-    expect(find.textContaining('プロフィールを登録'), findsOneWidget);
-
-    final container = ProviderScope.containerOf(
-        tester.element(find.byType(MeasurePage)));
+  Future<void> teardownBle(WidgetTester tester, Type pageType) async {
+    final container =
+        ProviderScope.containerOf(tester.element(find.byType(pageType)));
     final stop =
         container.read(bleControllerProvider.notifier).disconnect();
     await settle(tester, const Duration(milliseconds: 100));
     await stop;
-  });
+  }
 
-  testWidgets('BLE切断で再接続表示になり、再接続後に測定画面が復帰する', (tester) async {
+  testWidgets('開始→測定中: Mockデータが表示され、1Hzで更新される', (tester) async {
     await dogs.addDog(const Dog(id: '', name: 'ポチ'));
     await tester.pumpWidget(
         harness(ble: ble, dogs: dogs, measurements: measurements));
     await tester.pump();
     await connectBle(tester);
 
-    await tester.tap(find.text('測定をはじめる'));
+    expect(find.text('準備ができました'), findsNothing); // 文言はヒント側
+    await tester.tap(find.text('はじめる'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+
+    // 自動で測定開始(ACK) → サンプル到着
     await settle(tester, const Duration(milliseconds: 100));
     await settle(tester, const Duration(milliseconds: 1100));
-    expect(find.text('停止'), findsOneWidget);
+    await settle(tester, const Duration(milliseconds: 1100));
 
-    // ---- 切断 → 再接続表示 ----
+    final v1 =
+        tester.widget<Text>(find.byKey(const ValueKey('h2-value'))).data;
+    expect(v1, isNotNull);
+    expect(find.textContaining('ウォームアップ'), findsOneWidget);
+
+    await settle(tester, const Duration(milliseconds: 1100));
+    final v2 =
+        tester.widget<Text>(find.byKey(const ValueKey('h2-value'))).data;
+    expect(v2 == v1, isFalse); // 1Hzで値が動いている
+
+    await teardownBle(tester, MeasuringPage);
+  });
+
+  testWidgets('終了→結果画面へ遷移し、保存される(意味の言葉で表示)', (tester) async {
+    await dogs.addDog(const Dog(id: '', name: 'ポチ'));
+    await tester.pumpWidget(
+        harness(ble: ble, dogs: dogs, measurements: measurements));
+    await tester.pump();
+    await connectBle(tester);
+
+    await tester.tap(find.text('はじめる'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester, const Duration(milliseconds: 100));
+    await settle(tester, const Duration(milliseconds: 2200));
+
+    await tester.tap(find.text('終了する'));
+    await settle(tester, const Duration(milliseconds: 300)); // ACK+summary
+    await settle(tester, const Duration(milliseconds: 700)); // 遷移完了
+
+    expect(find.text('測定できました'), findsOneWidget);
+    expect(measurements.saved, hasLength(1)); // Firestore(メモリ)に保存済み
+    expect(find.text('ホームに戻る'), findsOneWidget);
+
+    await teardownBle(tester, ResultPage);
+  });
+
+  testWidgets('犬未登録: 開始できず登録導線が出る(クラッシュしない)', (tester) async {
+    await tester.pumpWidget(
+        harness(ble: ble, dogs: dogs, measurements: measurements));
+    await tester.pump();
+    await connectBle(tester);
+
+    expect(find.text('はじめる'), findsNothing);
+    expect(find.text('愛犬を登録する'), findsWidgets); // 導線
+    await teardownBle(tester, MeasureStartPage);
+  });
+
+  testWidgets('測定中のBLE切断で再接続表示、再接続後も測定画面が継続する', (tester) async {
+    await dogs.addDog(const Dog(id: '', name: 'ポチ'));
+    await tester.pumpWidget(
+        harness(ble: ble, dogs: dogs, measurements: measurements));
+    await tester.pump();
+    await connectBle(tester);
+
+    await tester.tap(find.text('はじめる'));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 400));
+    await settle(tester, const Duration(milliseconds: 1200));
+
+    // ---- 切断 → 再接続中の表示(青探索アイコン) ----
     final disc = ble.disconnect();
     await settle(tester, const Duration(milliseconds: 100));
     await disc;
     await tester.pump();
-    expect(find.text('再接続中…'), findsOneWidget);
+    expect(find.byIcon(Icons.bluetooth_searching), findsOneWidget);
 
-    // ---- 指数バックオフ(1s) → 自動再接続(接続700ms) ----
+    // ---- バックオフ1s → 自動再接続 ----
     await settle(tester, const Duration(milliseconds: 1100));
     await settle(tester, const Duration(milliseconds: 800));
     await settle(tester, const Duration(milliseconds: 200));
-    expect(find.text('接続中'), findsOneWidget);
-    // 測定画面が保たれている(値・停止ボタンが残存)
-    expect(find.text('停止'), findsOneWidget);
-    expect(find.text('––'), findsNothing);
+    expect(find.byIcon(Icons.bluetooth_searching), findsNothing);
+    // 測定画面が保たれている
+    expect(find.text('終了する'), findsOneWidget);
+    expect(find.byKey(const ValueKey('h2-value')), findsOneWidget);
 
-    final container = ProviderScope.containerOf(
-        tester.element(find.byType(MeasurePage)));
-    final stop =
-        container.read(bleControllerProvider.notifier).disconnect();
-    await settle(tester, const Duration(milliseconds: 100));
-    await stop;
+    await teardownBle(tester, MeasuringPage);
   });
 
-  testWidgets('ダークモードで測定画面・ホームが崩れない(オーバーフローなし)', (tester) async {
-    tester.view.physicalSize = const Size(1170, 2532); // iPhone級
+  testWidgets('ダークモードでホーム・測定タブが崩れない', (tester) async {
+    tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
 
-    await dogs.addDog(const Dog(
-        id: '', name: 'ポチ', breed: '柴犬', weightKg: 8.2));
+    await dogs.addDog(
+        const Dog(id: '', name: 'ポチ', breed: '柴犬', weightKg: 8.2));
 
-    // 測定画面(ダーク)
     await tester.pumpWidget(harness(
         ble: ble,
-        dogs: dogs,
-        measurements: measurements,
-        themeMode: ThemeMode.dark));
-    await tester.pump();
-    expect(tester.takeException(), isNull);
-    expect(find.byType(MeasurePage), findsOneWidget);
-
-    // ホーム(ダーク)
-    await tester.pumpWidget(harness(
-        ble: MockBleRepository(seed: 2),
         dogs: dogs,
         measurements: measurements,
         initialLocation: '/home',
         themeMode: ThemeMode.dark));
     await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
     expect(tester.takeException(), isNull);
-    expect(find.byType(HomePage), findsOneWidget);
     expect(find.text('ポチ'), findsOneWidget);
+    expect(find.text('はじめての測定をしてみましょう'), findsOneWidget); // 意味の言葉
+
+    await tester.pumpWidget(harness(
+        ble: MockBleRepository(seed: 2),
+        dogs: dogs,
+        measurements: measurements,
+        initialLocation: '/measure',
+        themeMode: ThemeMode.dark));
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 600));
+    expect(tester.takeException(), isNull);
+    expect(find.byType(MeasureStartPage), findsOneWidget);
   });
 }

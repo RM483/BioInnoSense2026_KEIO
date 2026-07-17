@@ -41,7 +41,7 @@ class DogProfilePage extends HookConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.dogProfile)),
+      appBar: AppBar(title: Text(l10n.tabDog)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -184,7 +184,14 @@ class DogProfilePage extends HookConsumerWidget {
                           ),
                           photoBytes: bytes,
                         );
-                    if (context.mounted) Navigator.of(context).pop();
+                    if (!context.mounted) return;
+                    // タブ直下では戻り先がないためスナックバーで完了を伝える
+                    if (Navigator.of(context).canPop()) {
+                      Navigator.of(context).pop();
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text(l10n.measurementSaved)));
+                    }
                   },
             child: saving
                 ? const SizedBox(

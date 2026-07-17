@@ -1,4 +1,6 @@
-/// 設定画面。デバイス管理・ログアウト等。
+/// 設定 — デバイス・デモ・言語・アカウント。
+/// 技術的な情報(接続・電池・Mock)はホームから隔離してここに集約する。
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -8,6 +10,7 @@ import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../auth/application/auth_controller.dart';
 import '../../ble/application/ble_controller.dart';
+import '../../ble/data/ble_service.dart';
 
 class SettingsPage extends ConsumerWidget {
   const SettingsPage({super.key});
@@ -20,48 +23,72 @@ class SettingsPage extends ConsumerWidget {
     final connected = ble.status == BleStatus.connected;
 
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.settings)),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: Column(
-              children: [
-                _SettingsRow(
-                  icon: Icons.bluetooth,
-                  title: l10n.deviceManagement,
-                  subtitle: connected
-                      ? '${l10n.connected}'
-                          '${ble.batteryMv != null ? ' · ${l10n.battery} ${(ble.batteryMv! / 1000).toStringAsFixed(2)}V' : ''}'
-                      : l10n.disconnected,
-                  subtitleColor: connected ? p.success : null,
-                  onTap: () => context.push(Routes.connect),
-                ),
-                Divider(height: 1, indent: 56, color: p.hairline),
-                _SettingsRow(
-                  icon: Icons.language,
-                  title: l10n.language,
-                  subtitle: l10n.followSystem,
-                ),
-              ],
+      body: SafeArea(
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+          children: [
+            Text(l10n.tabSettings,
+                style: AppText.largeTitle.copyWith(color: p.textPrimary)),
+            const SizedBox(height: 20),
+
+            // ---- デバイス ----
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: Column(
+                children: [
+                  _SettingsRow(
+                    icon: CupertinoIcons.dot_radiowaves_left_right,
+                    title: l10n.aboutDevice,
+                    subtitle: connected
+                        ? '${l10n.connected}'
+                            '${ble.batteryMv != null ? ' · ${l10n.battery} ${(ble.batteryMv! / 1000).toStringAsFixed(2)}V' : ''}'
+                        : l10n.disconnected,
+                    subtitleColor: connected ? p.success : null,
+                    onTap: () => context.push(Routes.connect),
+                  ),
+                  if (kUseMockBle) ...[
+                    Divider(height: 1, indent: 56, color: p.hairline),
+                    _SettingsRow(
+                      icon: CupertinoIcons.sparkles,
+                      title: l10n.demoMode,
+                      subtitle: l10n.demoModeDescription,
+                      subtitleColor: p.accent,
+                    ),
+                  ],
+                ],
+              ),
             ),
-          ),
-          const SizedBox(height: 16),
-          AppCard(
-            padding: EdgeInsets.zero,
-            child: _SettingsRow(
-              icon: Icons.logout,
-              title: l10n.logout,
-              titleColor: p.danger,
-              iconColor: p.danger,
-              onTap: () async {
-                await ref.read(bleControllerProvider.notifier).disconnect();
-                await ref.read(authControllerProvider.notifier).signOut();
-              },
+            const SizedBox(height: 14),
+
+            // ---- 一般 ----
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: _SettingsRow(
+                icon: CupertinoIcons.globe,
+                title: l10n.language,
+                subtitle: l10n.followSystem,
+              ),
             ),
-          ),
-        ],
+            const SizedBox(height: 14),
+
+            // ---- アカウント ----
+            AppCard(
+              padding: EdgeInsets.zero,
+              child: _SettingsRow(
+                icon: CupertinoIcons.square_arrow_right,
+                title: l10n.logout,
+                titleColor: p.danger,
+                iconColor: p.danger,
+                onTap: () async {
+                  await ref
+                      .read(bleControllerProvider.notifier)
+                      .disconnect();
+                  await ref.read(authControllerProvider.notifier).signOut();
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
