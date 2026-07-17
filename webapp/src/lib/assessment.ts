@@ -75,6 +75,36 @@ export const levelColor: Record<HealthLevel, string> = {
   elevated: 'var(--danger)',
 }
 
+/** 前回からの変化(なければnull) */
+export function trendLabel(a: Assessment): string | null {
+  switch (a.trend) {
+    case 'improving':
+      return '前回より改善しています'
+    case 'worsening':
+      return '前回より少し上がっています'
+    case 'steady':
+      return '前回と変わりありません'
+    default:
+      return null
+  }
+}
+
+/** ユーザーが取るべき行動(ホームで最も大切な一文) */
+export function actionLabel(a: Assessment): string {
+  if (a.level === 'none') return '1回3分ほどで、今日のコンディションを記録できます'
+  if (a.isStale) return 'そろそろ今日の測定をおすすめします'
+  switch (a.level) {
+    case 'stable':
+      return '通常どおり過ごして大丈夫そうです'
+    case 'slight':
+      return '今日は少し気にかけて、水分と食事をみてあげてください'
+    case 'elevated':
+      return '続くようであれば、かかりつけの獣医師に相談しましょう'
+    default:
+      return ''
+  }
+}
+
 export function assessmentComment(a: Assessment): string {
   if (a.level === 'none') return '1回3分ほどで、毎日のコンディションを記録できます'
   if (a.isStale) return 'そろそろ今日の測定をおすすめします'

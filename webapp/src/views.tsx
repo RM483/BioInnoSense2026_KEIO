@@ -16,13 +16,14 @@ import type {
 } from './providers/DataProvider'
 import { FLAG_WARMUP } from './providers/DataProvider'
 import {
+  actionLabel,
   assess,
-  assessmentComment,
   levelColor,
   levelForPpm,
   levelPhrase,
   levelShort,
   relativeTime,
+  trendLabel,
 } from './lib/assessment'
 import { ageLabel, type DogProfile } from './lib/dogProfile'
 
@@ -36,14 +37,17 @@ export function HomeView(props: {
   onOpenHistory: () => void
 }) {
   const a = assess(props.history)
+  const trend = trendLabel(a)
   return (
     <div className="stack view">
+      {/* 状態 → 変化 → 取るべき行動 の順に、3秒で安心を伝える */}
       <section className="card hero">
         <div className="hero-status">
           <span className="live-dot" style={{ background: levelColor[a.level] }} />
           <span className="phrase">{levelPhrase[a.level]}</span>
         </div>
-        <p className="comment">{assessmentComment(a)}</p>
+        {trend && <div className="trend-line-label">{trend}</div>}
+        <p className="comment">{actionLabel(a)}</p>
         {a.latest && (
           <div className="last-measured">
             最終測定 · {relativeTime(a.latest.startedAt)}
@@ -59,7 +63,7 @@ export function HomeView(props: {
               <ChevronIcon size={14} />
             </span>
           </div>
-          <TrendBars history={props.history} />
+          <TrendLine history={props.history} />
         </section>
       )}
 
@@ -149,7 +153,7 @@ export function HistoryView({ history }: { history: SessionSummary[] }) {
               <span className="label plain">最近の推移</span>
               <span className="aside">{history.length}件</span>
             </div>
-            <TrendBars history={history} tall />
+            <TrendLine history={history} tall />
           </section>
           <section className="card">
             <div className="history-list">
@@ -411,32 +415,86 @@ export function MeasureFlow(props: {
 
 /* ================= 共有部品 ================= */
 
-export function TrendBars({
+/**
+ * 最近の推移 — 直感的に「上がった/下がった」が分かる1本の折れ線。
+ * 軸・数値は出さない(意味はホーム、数値は履歴・詳細)。最新点だけを強調。
+ */
+export function TrendLine({
   history,
   tall = false,
 }: {
   history: SessionSummary[]
   tall?: boolean
 }) {
+  const W = 640
+  const H = tall ? 110 : 72
+  const PAD = { x: 6, y: 10 }
   const items = history.slice(0, tall ? 14 : 7).reverse()
-  const maxPpm = Math.max(10, ...items.map((h) => h.avgPpb / 1000))
+  const ppms = items.map((h) => h.avgPpb / 1000)
+  if (ppms.length < 2) return null
+
+  const min = Math.min(...ppms)
+  const max = Math.max(...ppms)
+  const span = Math.max(max - min, 1) // 変化が小さくても線が死なない程度に
+  const x = (i: number) => PAD.x + (i / (ppms.length - 1)) * (W - PAD.x * 2)
+  const y = (v: number) =>
+    PAD.y + (1 - (v - min) / span) * (H - PAD.y * 2)
+
+  let d = ''
+  ppms.forEach((v, i) => {
+    d += `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(v).toFixed(1)}`
+  })
+  const area = `${d}L${x(ppms.length - 1).toFixed(1)},${H}L${PAD.x},${H}Z`
+  const lastLevel = levelForPpm(ppms[ppms.length - 1])
+  const lastColor = levelColor[lastLevel]
+
   return (
-    <div className="trend-bars" style={tall ? { height: 96 } : undefined}>
-      {items.map((h, i) => {
-        const ppm = h.avgPpb / 1000
-        return (
-          <div className="trend-slot" key={`${h.startedAt}-${i}`}>
-            <div
-              className="trend-bar"
-              style={{
-                height: `${Math.max(12, (ppm / maxPpm) * 100)}%`,
-                background: levelColor[levelForPpm(ppm)],
-              }}
-            />
-          </div>
-        )
-      })}
-    </div>
+    <svg
+      className="trend-svg"
+      viewBox={`0 0 ${W} ${H}`}
+      preserveAspectRatio="none"
+      style={{ height: H }}
+      role="img"
+      aria-label="最近の推移"
+    >
+      <path d={area} fill="var(--accent)" fillOpacity="0.06" />
+      <path
+        d={d}
+        fill="none"
+        stroke="var(--accent)"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      {/* 各測定点(控えめ) */}
+      {ppms.slice(0, -1).map((v, i) => (
+        <circle
+          key={i}
+          cx={x(i)}
+          cy={y(v)}
+          r="2.2"
+          fill="var(--card)"
+          stroke="var(--accent)"
+          strokeWidth="1.4"
+        />
+      ))}
+      {/* 最新点は状態色で強調 */}
+      <circle
+        cx={x(ppms.length - 1)}
+        cy={y(ppms[ppms.length - 1])}
+        r="7"
+        fill={lastColor}
+        fillOpacity="0.15"
+      />
+      <circle
+        cx={x(ppms.length - 1)}
+        cy={y(ppms[ppms.length - 1])}
+        r="3.4"
+        fill={lastColor}
+        stroke="var(--card)"
+        strokeWidth="1.5"
+      />
+    </svg>
   )
 }
 

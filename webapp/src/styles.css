@@ -219,15 +219,31 @@ body {
   transition: color 0.35s ease;
 }
 
+/* 前回からの変化(状態のすぐ下・静かな一行) */
+.trend-line-label {
+  margin-top: 8px;
+  padding-left: 23px; /* ドット+gapぶんの光学揃え */
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
 .comment {
-  margin-top: 12px;
+  margin-top: 10px;
+  padding-left: 23px;
   font-size: 15px;
   line-height: 1.65;
   color: var(--text-secondary);
 }
 
+.hero .comment {
+  color: var(--text-primary);
+  font-weight: 500;
+}
+
 .last-measured {
   margin-top: 14px;
+  padding-left: 23px;
   font-size: 13px;
   color: var(--text-tertiary);
   font-variant-numeric: tabular-nums;
@@ -352,7 +368,33 @@ button:disabled { cursor: default; opacity: 0.4; }
   letter-spacing: -0.2px;
 }
 
-.btn.primary { background: var(--accent); color: #fff; }
+.btn.primary {
+  background: var(--accent);
+  color: #fff;
+  height: 56px;
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 25%, transparent);
+  transition:
+    transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.2s ease,
+    filter 0.2s ease,
+    opacity 0.2s ease;
+}
+
+.btn.primary:hover:not(:disabled) {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px color-mix(in srgb, var(--accent) 28%, transparent);
+  filter: brightness(1.04);
+}
+
+.btn.primary:active:not(:disabled) {
+  transform: scale(0.98);
+  box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.btn.primary:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--accent) 60%, transparent);
+  outline-offset: 2px;
+}
 .btn.stop { background: var(--text-primary); color: var(--bg); }
 .btn.ghost { background: var(--card-elevated); color: var(--text-primary); }
 
@@ -446,35 +488,24 @@ button:disabled { cursor: default; opacity: 0.4; }
   font-variant-numeric: tabular-nums;
 }
 
+.history-item .when {
+  font-size: 13.5px;
+  color: var(--text-secondary);
+}
+
 .history-item .meta {
-  width: 76px;
+  min-width: 76px;
   text-align: right;
   color: var(--text-tertiary);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- 最近の推移(無数値バー) ---- */
-.trend-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  height: 64px;
-  margin-top: 10px;
-}
-
-.trend-slot {
-  flex: 1;
-  height: 100%;
-  display: flex;
-  align-items: flex-end;
-}
-
-.trend-bar {
+/* ---- 最近の推移(折れ線・無数値) ---- */
+.trend-svg {
+  display: block;
   width: 100%;
-  border-radius: 5px;
-  opacity: 0.8;
-  transition: height 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+  margin-top: 10px;
 }
 
 /* ---- 詳細(技術情報) ---- */

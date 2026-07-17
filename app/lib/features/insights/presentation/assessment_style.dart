@@ -38,6 +38,27 @@ extension HealthLevelStyle on HealthLevel {
       };
 }
 
+/// 前回からの変化(なければnull) — ホームの2行目
+String? assessmentTrendLabel(HealthAssessment a, AppLocalizations l10n) =>
+    switch (a.trend) {
+      HealthTrend.improving => l10n.trendImproving,
+      HealthTrend.worsening => l10n.trendWorsening,
+      HealthTrend.steady => l10n.trendSteady,
+      HealthTrend.none => null,
+    };
+
+/// ユーザーが取るべき行動 — ホームで最も大切な一文
+String assessmentAction(HealthAssessment a, AppLocalizations l10n) {
+  if (a.level == HealthLevel.none) return l10n.commentNoData;
+  if (a.isStale) return l10n.staleSuggestion;
+  return switch (a.level) {
+    HealthLevel.stable => l10n.actionStable,
+    HealthLevel.slightlyElevated => l10n.actionSlightlyElevated,
+    HealthLevel.elevated => l10n.actionElevated,
+    HealthLevel.none => l10n.commentNoData,
+  };
+}
+
 /// 添える一言(優先度: 再測定のおすすめ > 傾向 > レベル別の一言)
 String assessmentComment(HealthAssessment a, AppLocalizations l10n) {
   if (a.level == HealthLevel.none) return l10n.commentNoData;

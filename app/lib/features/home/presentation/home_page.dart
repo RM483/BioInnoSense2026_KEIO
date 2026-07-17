@@ -4,6 +4,7 @@
 /// 履歴/詳細画面に退避し、ここには安心感に必要な要素だけを置く:
 /// 犬の名前 / 今日の状態 / ひとこと / 最終測定時刻 / 最近の推移 / 測定CTA。
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -74,11 +75,11 @@ class HomePage extends ConsumerWidget {
 
             const SizedBox(height: 14),
 
-            // ---- 測定CTA ----
+            // ---- 測定CTA (最重要ボタン: 少し高く・押下で沈む) ----
             if (dog != null)
-              FilledButton(
+              _PressableCta(
+                label: l10n.startMeasurement,
                 onPressed: () => context.go(Routes.measure),
-                child: Text(l10n.startMeasurement),
               ),
           ],
         ),
@@ -87,33 +88,43 @@ class HomePage extends ConsumerWidget {
   }
 }
 
-/// 状態カード: 色の点 + 状態の言葉 + ひとこと + 最終測定時刻。
+/// 状態カード — 3秒で伝える3行:
+/// 「今日の状態」→「前回からの変化」→「取るべき行動」(+最終測定時刻)。
 class _StatusCard extends StatelessWidget {
   const _StatusCard({required this.assessment, required this.l10n});
 
   final HealthAssessment assessment;
   final AppLocalizations l10n;
 
+  /// ドット(10) + 間隔(10) — 2行目以降の光学揃え
+  static const _indent = EdgeInsets.only(left: 20);
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final level = assessment.level;
     final latest = assessment.latest;
+    final trend = assessmentTrendLabel(assessment, l10n);
 
     return AppCard(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // ---- 1. 今日の状態 ----
           Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              AnimatedContainer(
-                duration: const Duration(milliseconds: 400),
-                width: 10,
-                height: 10,
-                decoration: BoxDecoration(
-                  color: level.color(p),
-                  shape: BoxShape.circle,
+              Padding(
+                padding: const EdgeInsets.only(top: 7),
+                child: AnimatedContainer(
+                  duration: const Duration(milliseconds: 400),
+                  width: 10,
+                  height: 10,
+                  decoration: BoxDecoration(
+                    color: level.color(p),
+                    shape: BoxShape.circle,
+                  ),
                 ),
               ),
               const SizedBox(width: 10),
@@ -129,18 +140,40 @@ class _StatusCard extends StatelessWidget {
               ),
             ],
           ),
+
+          // ---- 2. 前回からの変化 ----
+          if (trend != null) ...[
+            const SizedBox(height: 8),
+            Padding(
+              padding: _indent,
+              child: Text(
+                trend,
+                style: AppText.caption.copyWith(
+                    color: p.textSecondary, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+
+          // ---- 3. 取るべき行動 ----
           const SizedBox(height: 10),
-          Text(
-            assessmentComment(assessment, l10n),
-            style: AppText.body
-                .copyWith(color: p.textSecondary, height: 1.55),
+          Padding(
+            padding: _indent,
+            child: Text(
+              assessmentAction(assessment, l10n),
+              style: AppText.bodyMedium
+                  .copyWith(color: p.textPrimary, height: 1.55),
+            ),
           ),
+
           if (latest != null) ...[
             const SizedBox(height: 14),
-            Text(
-              '${l10n.lastMeasured} · '
-              '${relativeTime(l10n, latest.startedAt)}',
-              style: AppText.caption.copyWith(color: p.textTertiary),
+            Padding(
+              padding: _indent,
+              child: Text(
+                '${l10n.lastMeasured} · '
+                '${relativeTime(l10n, latest.startedAt)}',
+                style: AppText.caption.copyWith(color: p.textTertiary),
+              ),
             ),
           ],
         ],
@@ -149,7 +182,8 @@ class _StatusCard extends StatelessWidget {
   }
 }
 
-/// 最近の推移: 数値を出さないバーのならび(色 = その日の状態)。
+/// 最近の推移 — 直感的に「上がった/下がった」が分かる1本の折れ線。
+/// 軸・数値は出さない(数値の居場所は履歴・詳細)。最新点だけ状態色で強調。
 class _TrendCard extends StatelessWidget {
   const _TrendCard({required this.recent, required this.l10n});
 
@@ -160,9 +194,7 @@ class _TrendCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final items = recent.take(7).toList().reversed.toList(); // 古い→新しい
-    final maxPpm = items
-        .map((m) => m.avgPpm)
-        .fold<double>(HealthAssessment.stableMaxPpm, (a, b) => a > b ? a : b);
+    final values = [for (final m in items) m.avgPpm];
 
     return AppCard(
       padding: const EdgeInsets.fromLTRB(24, 20, 24, 18),
@@ -183,37 +215,165 @@ class _TrendCard extends StatelessWidget {
           ),
           const SizedBox(height: 14),
           SizedBox(
-            height: 56,
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                for (final m in items) ...[
-                  Expanded(
-                    child: TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 500),
-                      curve: Curves.easeOutCubic,
-                      tween: Tween(
-                          begin: 0,
-                          end: (m.avgPpm / maxPpm).clamp(0.12, 1.0)),
-                      builder: (context, t, _) => FractionallySizedBox(
-                        heightFactor: t,
-                        child: Container(
-                          decoration: BoxDecoration(
-                            color: HealthAssessment.levelForPpm(m.avgPpm)
-                                .color(p)
-                                .withOpacity(0.75),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                ],
-              ],
+            height: 64,
+            width: double.infinity,
+            child: CustomPaint(
+              painter: _TrendLinePainter(
+                values: values,
+                lineColor: p.accent,
+                fillColor: p.accent.withOpacity(0.06),
+                pointFill: p.card,
+                lastColor: HealthAssessment.levelForPpm(values.last)
+                    .color(p),
+              ),
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 軸なしのミニ折れ線(各点は控えめ、最新点のみ状態色でハロー付き)。
+class _TrendLinePainter extends CustomPainter {
+  _TrendLinePainter({
+    required this.values,
+    required this.lineColor,
+    required this.fillColor,
+    required this.pointFill,
+    required this.lastColor,
+  });
+
+  final List<double> values;
+  final Color lineColor;
+  final Color fillColor;
+  final Color pointFill;
+  final Color lastColor;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    if (values.length < 2) return;
+    final min = values.reduce((a, b) => a < b ? a : b);
+    final max = values.reduce((a, b) => a > b ? a : b);
+    final span = (max - min) < 1 ? 1.0 : (max - min);
+    const padY = 10.0;
+    const padX = 6.0;
+
+    Offset at(int i) => Offset(
+          padX + i / (values.length - 1) * (size.width - padX * 2),
+          padY +
+              (1 - (values[i] - min) / span) * (size.height - padY * 2),
+        );
+
+    final path = Path()..moveTo(at(0).dx, at(0).dy);
+    for (var i = 1; i < values.length; i++) {
+      path.lineTo(at(i).dx, at(i).dy);
+    }
+
+    // 薄い面
+    final area = Path.from(path)
+      ..lineTo(at(values.length - 1).dx, size.height)
+      ..lineTo(at(0).dx, size.height)
+      ..close();
+    canvas.drawPath(area, Paint()..color = fillColor);
+
+    // 線
+    canvas.drawPath(
+      path,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..color = lineColor,
+    );
+
+    // 途中の点(控えめ)
+    for (var i = 0; i < values.length - 1; i++) {
+      canvas.drawCircle(at(i), 2.4, Paint()..color = pointFill);
+      canvas.drawCircle(
+        at(i),
+        2.4,
+        Paint()
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1.4
+          ..color = lineColor,
+      );
+    }
+
+    // 最新点(状態色 + ハロー)
+    final last = at(values.length - 1);
+    canvas.drawCircle(
+        last, 7, Paint()..color = lastColor.withOpacity(0.15));
+    canvas.drawCircle(last, 3.4, Paint()..color = lastColor);
+    canvas.drawCircle(
+      last,
+      3.4,
+      Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1.5
+        ..color = pointFill,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_TrendLinePainter old) =>
+      old.values != values || old.lastColor != lastColor;
+}
+
+/// 押下で0.98に沈み、指を離すと戻る主CTA(触覚つき)。
+class _PressableCta extends StatefulWidget {
+  const _PressableCta({required this.label, required this.onPressed});
+
+  final String label;
+  final VoidCallback onPressed;
+
+  @override
+  State<_PressableCta> createState() => _PressableCtaState();
+}
+
+class _PressableCtaState extends State<_PressableCta> {
+  bool _pressed = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return AnimatedScale(
+      scale: _pressed ? 0.98 : 1.0,
+      duration: const Duration(milliseconds: 120),
+      curve: Curves.easeOut,
+      child: GestureDetector(
+        onTapDown: (_) => setState(() => _pressed = true),
+        onTapCancel: () => setState(() => _pressed = false),
+        onTapUp: (_) => setState(() => _pressed = false),
+        onTap: () {
+          HapticFeedback.selectionClick();
+          widget.onPressed();
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          height: 58,
+          alignment: Alignment.center,
+          decoration: BoxDecoration(
+            color: p.accent,
+            borderRadius: BorderRadius.circular(29),
+            boxShadow: [
+              BoxShadow(
+                color: p.accent.withOpacity(_pressed ? 0.15 : 0.28),
+                blurRadius: _pressed ? 6 : 14,
+                offset: Offset(0, _pressed ? 1 : 5),
+              ),
+            ],
+          ),
+          child: Text(
+            widget.label,
+            style: AppText.bodyMedium.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w600,
+              fontSize: 17,
+            ),
+          ),
+        ),
       ),
     );
   }
