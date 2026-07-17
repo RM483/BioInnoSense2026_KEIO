@@ -35,6 +35,7 @@ import { ageLabel, type DogProfile } from './lib/dogProfile'
 
 export function HomeView(props: {
   history: SessionSummary[]
+  dogName: string
   conn: ConnectionStatus
   busy: boolean
   onStart: () => void
@@ -42,27 +43,47 @@ export function HomeView(props: {
 }) {
   const a = assess(props.history)
   const trend = trendLabel(a)
+  const color = levelColor[a.level === 'none' ? 'none' : a.level]
   return (
-    <div className="stack view">
-      {/* 状態 → 変化 → 取るべき行動 の順に、3秒で安心を伝える */}
-      <section className="card hero">
-        <div className="hero-status">
-          <span className="live-dot" style={{ background: levelColor[a.level] }} />
-          <span className="phrase">{levelPhrase[a.level]}</span>
-        </div>
-        {trend && <div className="trend-line-label">{trend}</div>}
-        <p className="comment">{actionLabel(a)}</p>
+    <div className="stack view home-canvas">
+      {/* ---- 挨拶 (話しかける入口) ---- */}
+      <div className="greeting">{greeting()} · {todayLabel()}</div>
+
+      {/* ---- 見守りリング (主役 / docs/16 案B) ---- */}
+      <button
+        className="care-ring"
+        style={{ background: `color-mix(in srgb, ${color} 7%, transparent)` }}
+        onClick={props.onStart}
+        aria-label="測定をはじめる"
+      >
+        <span
+          className="care-ring-rim"
+          style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}
+        >
+          <span className="care-ring-face">
+            <PawIcon size={62} />
+          </span>
+        </span>
+      </button>
+
+      {/* ---- 言葉: 名前 → 状態 → 変化 → 行動 → 最終測定 ---- */}
+      <div className="home-words">
+        <div className="dog-label">{props.dogName}</div>
+        <h2 className="phrase">{levelPhrase[a.level]}</h2>
+        {trend && <div className="trend-line-label center">{trend}</div>}
+        <p className="action">{actionLabel(a)}</p>
         {a.latest && (
-          <div className="last-measured">
+          <div className="last-measured center">
             最終測定 · {relativeTime(a.latest.startedAt)}
           </div>
         )}
-      </section>
+      </div>
 
+      {/* ---- ここ7日のようす (平置き・カードにしない) ---- */}
       {props.history.length >= 2 && (
-        <section className="card" onClick={props.onOpenHistory} role="button">
+        <section className="trend-flat" onClick={props.onOpenHistory} role="button">
           <div className="card-head">
-            <span className="label plain">最近の健康状態</span>
+            <span className="label plain">ここ7日のようす</span>
             <StatusChip level={a.level} />
           </div>
           <TrendLine history={props.history} />
@@ -79,21 +100,23 @@ export function HomeView(props: {
           {props.conn === 'connecting' ? '接続しています…' : '測定をはじめる'}
         </button>
       </div>
-
-      {props.history.length > 0 && (
-        <section className="card">
-          <div className="card-head">
-            <span className="label plain">最近の記録</span>
-          </div>
-          <div className="history-list">
-            {props.history.slice(0, 3).map((h, i) => (
-              <HistoryRow key={`${h.startedAt}-${i}`} s={h} />
-            ))}
-          </div>
-        </section>
-      )}
     </div>
   )
+}
+
+function greeting(): string {
+  const h = new Date().getHours()
+  if (h < 11) return 'おはようございます'
+  if (h < 18) return 'こんにちは'
+  return 'こんばんは'
+}
+
+function todayLabel(): string {
+  return new Intl.DateTimeFormat('ja-JP', {
+    month: 'long',
+    day: 'numeric',
+    weekday: 'short',
+  }).format(new Date())
 }
 
 /* ================= 測定 (開始前) ================= */
@@ -438,7 +461,8 @@ export function TrendLine({
 }) {
   const W = 640
   const H = tall ? 132 : 96
-  const PAD = { left: 6, right: 64, top: 8, bottom: 8 } // 右はゾーンラベル用
+  // ラベルは帯の内側(左)に置く。右は最新点のハロー(8px)ぶんを確保 (docs/16 R7/R13)
+  const PAD = { left: 6, right: 16, top: 8, bottom: 8 }
   const items = history.slice(0, tall ? 14 : 7).reverse()
   const ppms = items.map((h) => h.avgPpb / 1000)
   if (ppms.length < 2) return null
@@ -550,11 +574,11 @@ export function TrendLine({
         />
       </svg>
 
-      {/* ---- ラベル(HTMLオーバーレイ: 拡縮で歪まない) ---- */}
+      {/* ---- ラベル(HTMLオーバーレイ: 帯の内側左に置き点と衝突しない) ---- */}
       <span
         className="band-label"
         style={{
-          top: `${((yStable + yBottom) / 2 / H) * 100}%`,
+          bottom: 6,
           color: 'var(--success)',
         }}
       >

@@ -43,9 +43,10 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color success;
 
   static const light = AppPalette(
-    bg: Color(0xFFF7F7F8),
+    // 暖かい紙色 — 医療の冷たさを消し「見守り」の温度に (docs/16 §5)
+    bg: Color(0xFFF6F5F2),
     card: Color(0xFFFFFFFF),
-    cardElevated: Color(0xFFF2F2F4),
+    cardElevated: Color(0xFFF0EFEA),
     hairline: Color(0x14000000),
     textPrimary: Color(0xFF17181C),
     textSecondary: Color(0xFF6E7076),

@@ -170,8 +170,8 @@ export default function App() {
 
   return (
     <div className="app">
-      {/* ---- ヘッダ ---- */}
-      <header className="header">
+      {/* ---- ヘッダ (ホームはキャンバス自身がヘッダ — 二重化を避ける) ---- */}
+      <header className={`header ${tab === 'home' ? 'home-mode' : ''}`}>
         <div className="brand-avatar">
           <PawIcon size={22} />
         </div>
@@ -197,6 +197,7 @@ export default function App() {
       {tab === 'home' && (
         <HomeView
           history={history}
+          dogName={profile.name}
           conn={conn}
           busy={busy}
           onStart={startMeasurement}

@@ -36,7 +36,7 @@ class ResultPage extends ConsumerWidget {
             children: [
               const Spacer(flex: 2),
 
-              // ---- 状態の輪 (静かな完了表現) ----
+              // ---- 見守りリングの完了形 (満色+✓ / docs/12 §3b) ----
               TweenAnimationBuilder<double>(
                 duration: const Duration(milliseconds: 600),
                 curve: Curves.easeOutCubic,
@@ -51,6 +51,9 @@ class ResultPage extends ConsumerWidget {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
+                    border: Border.all(
+                        color: level.color(p).withOpacity(0.55),
+                        width: 1.75),
                     color: level.softColor(p),
                   ),
                   child: Icon(Icons.check_rounded,

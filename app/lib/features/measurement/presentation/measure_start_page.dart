@@ -6,6 +6,7 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/widgets/status_ring.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../ble/application/ble_controller.dart';
 import '../../dogs/application/dog_controller.dart';
@@ -32,18 +33,16 @@ class MeasureStartPage extends ConsumerWidget {
                   style: AppText.largeTitle.copyWith(color: p.textPrimary)),
               const Spacer(),
 
-              // ---- 中央: 誰の測定か + 状態 ----
+              // ---- 中央: 見守りリング (測定中の呼吸リングへHeroで連続) ----
               Center(
                 child: Column(
                   children: [
-                    _PulseRing(
-                      active: connected,
-                      color: connected ? p.accent : p.textTertiary,
-                      size: 148,
-                      child: Icon(
-                        Icons.pets,
-                        size: 44,
+                    Hero(
+                      tag: 'care-ring',
+                      child: StatusRing(
+                        size: 148,
                         color: connected ? p.accent : p.textTertiary,
+                        photoUrl: dog?.photoUrl ?? '',
                       ),
                     ),
                     const SizedBox(height: 28),
@@ -94,61 +93,3 @@ class MeasureStartPage extends ConsumerWidget {
   }
 }
 
-/// ゆっくり呼吸するようなリング。activeのとき静かに脈動する。
-class _PulseRing extends StatefulWidget {
-  const _PulseRing({
-    required this.active,
-    required this.color,
-    required this.size,
-    required this.child,
-  });
-
-  final bool active;
-  final Color color;
-  final double size;
-  final Widget child;
-
-  @override
-  State<_PulseRing> createState() => _PulseRingState();
-}
-
-class _PulseRingState extends State<_PulseRing>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller = AnimationController(
-    vsync: this,
-    duration: const Duration(seconds: 3),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: _controller,
-      builder: (context, child) {
-        final t = widget.active
-            ? Curves.easeInOut.transform(_controller.value)
-            : 0.0;
-        return Container(
-          width: widget.size,
-          height: widget.size,
-          alignment: Alignment.center,
-          decoration: BoxDecoration(
-            shape: BoxShape.circle,
-            color: widget.color.withOpacity(0.06 + 0.04 * t),
-            border: Border.all(
-              color: widget.color.withOpacity(0.25 + 0.20 * t),
-              width: 1.5,
-            ),
-          ),
-          child: Transform.scale(scale: 1.0 + 0.03 * t, child: child),
-        );
-      },
-      child: widget.child,
-    );
-  }
-}

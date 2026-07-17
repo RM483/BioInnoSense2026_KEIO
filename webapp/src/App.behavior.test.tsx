@@ -60,17 +60,22 @@ describe('HydroPaw Web SPA (MockProvider)', () => {
     expect(screen.getByText('測定できました')).toBeTruthy()
     expect(screen.getByText('測定時間')).toBeTruthy()
 
-    // ホームへ → 評価と履歴が更新されている
+    // ホームへ → 評価が更新され、リングと言葉が主役に
     fireEvent.click(screen.getByText('ホームに戻る'))
     await tick(50)
     expect(document.querySelector('.overlay')).toBeNull()
+    expect(document.querySelector('.care-ring')).toBeTruthy()
     expect(
       ['今日は安定しています', '少し高めです。様子を見ましょう', '高めの値が続いています'],
-    ).toContain(document.querySelector('.hero .phrase')!.textContent)
-    expect(document.querySelectorAll('.history-item').length).toBeGreaterThan(0)
+    ).toContain(document.querySelector('.home-words .phrase')!.textContent)
     expect(document.querySelector('.last-measured')!.textContent).toContain(
       '最終測定',
     )
+
+    // 記録の住所は履歴タブ
+    fireEvent.click(screen.getAllByText('履歴')[0])
+    await tick(10)
+    expect(document.querySelectorAll('.history-item').length).toBeGreaterThan(0)
   }, 15000)
 
   it('タブ遷移: 設定に技術情報が隔離され、愛犬プロフィールが編集できる', async () => {
@@ -104,11 +109,11 @@ describe('HydroPaw Web SPA (MockProvider)', () => {
     await tick(1700)
     fireEvent.click(screen.getByText('ホームに戻る'))
     await tick(50)
-    expect(document.querySelectorAll('.history-item').length).toBeGreaterThan(0)
 
     cleanup()
+    location.hash = ''
     render(<App />) // リロード相当
-    expect(document.querySelector('.hero .phrase')!.textContent).not.toBe(
+    expect(document.querySelector('.home-words .phrase')!.textContent).not.toBe(
       'はじめての測定をしてみましょう',
     )
   })

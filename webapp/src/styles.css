@@ -2,9 +2,10 @@
  * 思想: グループ化された背景 + 白カード / 数値が主役 / 階層の明確な
  * タイポグラフィ / 控えめで滑らかなアニメーション */
 :root {
-  --bg: #f2f2f7; /* iOS grouped background */
+  /* 暖かい紙色 — 医療の冷たさを消し「見守り」の温度に (docs/16 §5) */
+  --bg: #f6f5f2;
   --card: #ffffff;
-  --card-elevated: #f2f2f4;
+  --card-elevated: #f0efea;
   --hairline: rgba(60, 60, 67, 0.12);
   --text-primary: #1c1c1e;
   --text-secondary: rgba(60, 60, 67, 0.6);
@@ -98,6 +99,18 @@ body {
   flex: 1;
 }
 
+/* ホーム: 見出し・アバターを消し、静かな入口にする (docs/16 R6) */
+.header.home-mode .brand-avatar,
+.header.home-mode .titles {
+  display: none;
+}
+
+.header.home-mode {
+  justify-content: flex-end;
+  min-height: 0;
+  margin-bottom: 4px;
+}
+
 .header .date {
   font-size: 13px;
   font-weight: 600;
@@ -186,7 +199,106 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
-/* ---- ヒーロー(意味の言葉が主役) ---- */
+/* ==== ホーム: 見守りリング (docs/16 案B / docs/12 §3b) ==== */
+.home-canvas {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 8px;
+}
+
+.greeting {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 18px;
+}
+
+/* リング: 進捗ではない「見守りの輪」。目盛り・%は描かない */
+.care-ring {
+  width: 176px;
+  height: 176px;
+  border-radius: 50%;
+  background: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.4s ease,
+    transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.care-ring:hover { transform: scale(1.02); }
+.care-ring:active { transform: scale(0.98); }
+
+.care-ring-rim {
+  width: 151px;
+  height: 151px;
+  border-radius: 50%;
+  border: 1.75px solid;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.4s ease;
+}
+
+.care-ring-face {
+  width: 137px;
+  height: 137px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: color-mix(in srgb, var(--accent) 55%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.home-words {
+  margin-top: 20px;
+  text-align: center;
+  max-width: 480px;
+}
+
+.dog-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.home-words .phrase {
+  margin-top: 6px;
+  font-size: 24px;
+}
+
+.trend-line-label.center,
+.last-measured.center {
+  padding-left: 0;
+  text-align: center;
+}
+
+.home-words .action {
+  margin-top: 10px;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.65;
+  color: var(--text-primary);
+}
+
+/* ここ7日のようす — 平置き(カードにしない) */
+.trend-flat {
+  width: 100%;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hairline);
+  cursor: pointer;
+}
+
+.home-canvas .controls {
+  width: 100%;
+  margin-top: 20px;
+}
+
+/* ---- ヒーロー(意味の言葉が主役 — 測定中ビュー等で使用) ---- */
 .hero {
   padding: 26px 24px;
 }
@@ -515,13 +627,16 @@ button:disabled { cursor: default; opacity: 0.4; }
 
 .band-label {
   position: absolute;
-  right: 2px;
-  transform: translateY(-50%);
+  left: 10px;
   font-size: 10.5px;
   font-weight: 600;
   letter-spacing: 0.2px;
   opacity: 0.9;
   pointer-events: none;
+}
+
+.band-label[style*='top'] {
+  transform: translateY(-130%); /* 点線の上に静かに置く */
 }
 
 /* グラフの言葉による要約(線の意味を一文で) */

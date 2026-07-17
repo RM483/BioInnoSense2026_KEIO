@@ -106,12 +106,10 @@ class HistoryPage extends ConsumerWidget {
                 else ...[
                   if (items.length >= 2) ...[
                     _TrendChartCard(items: items, l10n: l10n),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 20),
                   ],
-                  for (final m in items) ...[
-                    _HistoryRow(measurement: m),
-                    const SizedBox(height: 10),
-                  ],
+                  // 日誌構造: 日付見出しで記録をまとめる (docs/16 案C吸収)
+                  ..._journal(context, items, l10n),
                 ],
               ],
             ),
@@ -200,6 +198,45 @@ class _TrendChartCard extends StatelessWidget {
   }
 }
 
+/// 日誌: 日付見出し + その日の記録行。
+List<Widget> _journal(
+    BuildContext context, List<Measurement> items, AppLocalizations l10n) {
+  final p = context.palette;
+  final locale = Localizations.localeOf(context).toLanguageTag();
+  final now = DateTime.now();
+  final today = DateTime(now.year, now.month, now.day);
+
+  String dayLabel(DateTime d) {
+    final day = DateTime(d.year, d.month, d.day);
+    if (day == today) return l10n.today;
+    if (day == today.subtract(const Duration(days: 1))) {
+      return l10n.yesterday;
+    }
+    return DateFormat.MMMEd(locale).format(d);
+  }
+
+  final out = <Widget>[];
+  DateTime? lastDay;
+  for (final m in items) {
+    final day =
+        DateTime(m.startedAt.year, m.startedAt.month, m.startedAt.day);
+    if (day != lastDay) {
+      out.add(Padding(
+        padding: EdgeInsets.only(top: lastDay == null ? 0 : 14, bottom: 10),
+        child: Text(
+          dayLabel(m.startedAt),
+          style: AppText.caption.copyWith(
+              color: p.textTertiary, fontWeight: FontWeight.w600),
+        ),
+      ));
+      lastDay = day;
+    }
+    out.add(_HistoryRow(measurement: m));
+    out.add(const SizedBox(height: 10));
+  }
+  return out;
+}
+
 class _HistoryRow extends StatelessWidget {
   const _HistoryRow({required this.measurement});
   final Measurement measurement;
@@ -233,8 +270,7 @@ class _HistoryRow extends StatelessWidget {
                         .copyWith(color: p.textPrimary)),
                 const SizedBox(height: 2),
                 Text(
-                  '${DateFormat.MMMEd(locale).format(m.startedAt)} '
-                  '${DateFormat.Hm(locale).format(m.startedAt)}',
+                  DateFormat.Hm(locale).format(m.startedAt),
                   style: AppText.caption.copyWith(color: p.textTertiary),
                 ),
               ],

@@ -141,8 +141,10 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
               ),
               const Spacer(),
 
-              // ---- 呼吸リング + 状態の言葉 ----
-              AnimatedBuilder(
+              // ---- 呼吸リング (準備画面のStatusRingからHeroで連続) ----
+              Hero(
+                tag: 'care-ring',
+                child: AnimatedBuilder(
                 animation: _breath,
                 builder: (context, _) {
                   final t = Curves.easeInOut.transform(_breath.value);
@@ -210,6 +212,7 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
                     ),
                   );
                 },
+                ),
               ),
               const SizedBox(height: 32),
               Text(
