@@ -1,6 +1,8 @@
 /// 測定エンティティ(Freezed)。docs/07_db_design.md のMEASUREMENTに対応。
 import 'package:freezed_annotation/freezed_annotation.dart';
 
+import '../../../core/constants/h2.dart';
+
 part 'measurement.freezed.dart';
 part 'measurement.g.dart';
 
@@ -21,8 +23,8 @@ class H2Sample with _$H2Sample {
       _$H2SampleFromJson(json);
 
   double get h2Ppm => h2Ppb / 1000.0;
-  bool get isValid => (flags & 0x03) == 0; // OUT_OF_RANGE|STUCKなし
-  bool get isWarmup => (flags & 0x04) != 0;
+  bool get isValid => (flags & H2.invalidMask) == 0; // OUT_OF_RANGE|STUCKなし
+  bool get isWarmup => (flags & H2.flagWarmup) != 0;
 }
 
 /// 保存される測定セッション

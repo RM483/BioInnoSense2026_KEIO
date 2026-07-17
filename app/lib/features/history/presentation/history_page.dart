@@ -16,12 +16,14 @@ final historyProvider =
 
 class HistoryNotifier extends AsyncNotifier<List<Measurement>> {
   bool _hasMore = true;
+  bool _loadingMore = false;
 
   @override
   Future<List<Measurement>> build() async {
     final dog = ref.watch(selectedDogProvider);
     if (dog == null) return [];
     _hasMore = true;
+    _loadingMore = false;
     return ref
         .read(measurementRepositoryProvider)
         .fetchHistory(dog.id, limit: 20);
@@ -30,13 +32,18 @@ class HistoryNotifier extends AsyncNotifier<List<Measurement>> {
   Future<void> loadMore() async {
     final current = state.valueOrNull ?? [];
     final dog = ref.read(selectedDogProvider);
-    if (dog == null || current.isEmpty || !_hasMore) return;
-    final more = await ref.read(measurementRepositoryProvider).fetchHistory(
-        dog.id,
-        before: current.last.startedAt,
-        limit: 20);
-    _hasMore = more.isNotEmpty;
-    state = AsyncData([...current, ...more]);
+    if (dog == null || current.isEmpty || !_hasMore || _loadingMore) return;
+    _loadingMore = true;
+    try {
+      final more = await ref.read(measurementRepositoryProvider).fetchHistory(
+          dog.id,
+          before: current.last.startedAt,
+          limit: 20);
+      _hasMore = more.isNotEmpty;
+      state = AsyncData([...current, ...more]);
+    } finally {
+      _loadingMore = false;
+    }
   }
 }
 

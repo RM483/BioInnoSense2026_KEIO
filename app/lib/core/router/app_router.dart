@@ -1,5 +1,4 @@
 /// GoRouterによる宣言的ルーティング。認証状態でリダイレクトする。
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
@@ -28,10 +27,14 @@ abstract final class Routes {
 }
 
 final appRouterProvider = Provider<GoRouter>((ref) {
-  final authStream = ref.watch(authStateChangesProvider.stream);
+  // 認証状態の変化でGoRouterのredirectを再評価させる
+  final refresh = ValueNotifier(0);
+  ref
+    ..onDispose(refresh.dispose)
+    ..listen(authStateChangesProvider, (_, __) => refresh.value++);
   return GoRouter(
     initialLocation: Routes.splash,
-    refreshListenable: _StreamListenable(authStream),
+    refreshListenable: refresh,
     redirect: (context, state) {
       final user = ref.read(authStateChangesProvider).valueOrNull;
       final loggingIn = state.matchedLocation == Routes.login;
@@ -59,16 +62,3 @@ final appRouterProvider = Provider<GoRouter>((ref) {
   );
 });
 
-/// Stream→Listenable変換 (GoRouter refresh用)
-class _StreamListenable extends ChangeNotifier {
-  _StreamListenable(Stream<User?> stream) {
-    _sub = stream.listen((_) => notifyListeners());
-  }
-  late final dynamic _sub;
-
-  @override
-  void dispose() {
-    _sub.cancel();
-    super.dispose();
-  }
-}

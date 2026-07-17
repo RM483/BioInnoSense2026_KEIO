@@ -7,6 +7,11 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 
 import '../../../core/error/app_exception.dart';
 import 'hpp_codec.dart';
+import 'mock_ble_repository.dart';
+
+/// `--dart-define=USE_MOCK_BLE=true` でモック(実機なし開発)へ切替。
+const bool kUseMockBle =
+    bool.fromEnvironment('USE_MOCK_BLE', defaultValue: false);
 
 /// AC02仮想UARTサービスのUUID。
 /// NOTE: 実機のAC02ファームウェアで要確認。異なる場合はここだけ変更する。
@@ -38,6 +43,11 @@ abstract interface class BleRepository {
 }
 
 final bleRepositoryProvider = Provider<BleRepository>((ref) {
+  if (kUseMockBle) {
+    final mock = MockBleRepository();
+    ref.onDispose(mock.dispose);
+    return mock;
+  }
   final service = FlutterBluePlusBleRepository();
   ref.onDispose(service.dispose);
   return service;
@@ -66,10 +76,15 @@ class FlutterBluePlusBleRepository implements BleRepository {
   @override
   Stream<List<ScannedDevice>> scan(
       {Duration timeout = const Duration(seconds: 10)}) {
-    FlutterBluePlus.startScan(
-      withServices: [BleUuids.service],
-      timeout: timeout,
-    );
+    Future(() async {
+      // 二重スキャン開始の例外を防ぐ
+      if (FlutterBluePlus.isScanningNow) {
+        await FlutterBluePlus.stopScan();
+      }
+      // NOTE: AC02がサービスUUIDをアドバタイズしない場合に備え、
+      // UUIDフィルタは使わず名前prefixのみで絞り込む(要実機確認)。
+      await FlutterBluePlus.startScan(timeout: timeout);
+    });
     return FlutterBluePlus.scanResults.map(
       (results) => results
           .where((r) =>

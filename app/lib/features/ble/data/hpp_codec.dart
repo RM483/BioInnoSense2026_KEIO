@@ -19,6 +19,7 @@ abstract final class Hpp {
   static const cmdWake = 0x05;
   static const cmdGetStatus = 0x06;
   static const cmdGetInfo = 0x07;
+  static const cmdZero = 0x08; // DGS2ゼロ校正(クリーンエア中)
   // 応答・イベント (FW→App)
   static const ack = 0x40;
   static const nak = 0x41;
@@ -62,6 +63,16 @@ class HppFrame {
   int get statusState => payload[0];
   int get statusBatteryMv => _view.getUint16(1, Endian.little);
   bool get statusSensorOk => payload[3] != 0;
+  int get statusUptimeS => _view.getUint32(4, Endian.little);
+
+  /// v1.1拡張フィールド(FW側12Bペイロード)。旧FW(8B)では0を返す。
+  int get statusCrcErrors =>
+      payload.length >= 12 ? _view.getUint16(8, Endian.little) : 0;
+  int get statusResyncs =>
+      payload.length >= 12 ? _view.getUint16(10, Endian.little) : 0;
+
+  /// FW状態: SM_MEASURING(=3)なら測定継続中(再接続後のUI再同期に使用)
+  bool get statusIsMeasuring => statusState == 3;
 
   // ---- ACK/NAK/EVT_ERROR ----
   int get ackCmd => payload[0];
