@@ -1,0 +1,39 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ユーザーは自分のuid配下のみ読み書き可能(完全分離)
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+
+      match /dogs/{dogId} {
+        allow read, write: if isOwner(uid);
+
+        match /measurements/{id} {
+          allow read, create: if isOwner(uid) && validMeasurement();
+          allow update, delete: if isOwner(uid);
+        }
+        match /meals/{id}      { allow read, write: if isOwner(uid); }
+        match /symptoms/{id}   { allow read, write: if isOwner(uid); }
+        // dailyStatsはFunctionsのみ書込み(クライアントはread only)
+        match /dailyStats/{id} { allow read: if isOwner(uid); }
+        match /alerts/{id}     { allow read: if isOwner(uid); }
+      }
+      match /devices/{deviceId} { allow read, write: if isOwner(uid); }
+    }
+
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    // 測定ドキュメントの妥当性(型・サイズ上限)
+    function validMeasurement() {
+      let d = request.resource.data;
+      return d.avgPpb is int
+          && d.maxPpb is int
+          && d.sampleCount is int && d.sampleCount >= 0
+          && d.durationS is int && d.durationS <= 3600
+          && d.series.size() <= 600;
+    }
+  }
+}

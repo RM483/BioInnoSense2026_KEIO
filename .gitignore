@@ -1,0 +1,37 @@
+# ---- Flutter (app/) ----
+app/.dart_tool/
+app/build/
+app/.flutter-plugins*
+app/.packages
+app/pubspec.lock
+app/ios/Pods/
+app/android/.gradle/
+# コード生成物 (build_runner / gen-l10n で再生成可能)
+app/**/*.g.dart
+app/**/*.freezed.dart
+app/lib/l10n/app_localizations*.dart
+# Firebase接続情報 (flutterfire configure で再生成。公開リポジトリなら除外推奨)
+app/lib/firebase_options.dart
+app/android/app/google-services.json
+app/ios/Runner/GoogleService-Info.plist
+
+# ---- Firmware (firmware/) ----
+firmware/Debug/
+firmware/Release/
+firmware/Tests/test_hpp
+firmware/Tests/test_dgs2_parser
+*.o
+*.elf
+*.map
+
+# ---- Firebase Functions ----
+firebase/functions/node_modules/
+firebase/functions/lib/
+firebase/.firebase/
+firebase/*-debug.log
+
+# ---- OS / IDE ----
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
