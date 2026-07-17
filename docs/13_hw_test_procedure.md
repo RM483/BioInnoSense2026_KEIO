@@ -175,7 +175,41 @@
 | 手順 | Release構成(`HYDROPAW_LOG_DISABLE`)で書込み→T3〜T5相当を再走 |
 | 合格条件 | ログ無しで全機能動作(ログ依存の副作用がない)・電流をDebugと比較記録 |
 
-## 3. 診断ログリファレンス (Debugビルドのみ)
+## 3. 診断ログの非侵襲性 (レビュー結果)
+
+コード精査で確認済みの事実(2026-07-18, コミット参照):
+
+| 観点 | 結果 |
+|---|---|
+| ISR内のログ | **なし**。RxCplt/ErrorCallback/割込みハンドラはバッファ格納と再アームのみ |
+| BLE送信タイミング | 当初ログが送信前にあり全フレーム約2.7ms遅延 → **送信後に移動して解消** |
+| STOP2直前の出力 | `enter STOP2`(13B≈1.3ms)。HAL_UART_TransmitはTC完了までブロックするため**送信完了後にSTOP2へ入る**(文字化け・中断なし)。移行が1.3ms遅れるのみで機能影響なし |
+| 復帰直後 | `wake from STOP2`はクロック再構成+IWDGリフレッシュ**後**。復帰バイトはISR+リングバッファが保持するため損失に影響しない |
+| 測定周期 | 周期はDGS2側(1Hz)が決める。ログはループ遅延+約5ms/秒で周期に影響なし |
+| UARTタイムアウト | LPUART 20ms/BLE 100ms/DGS2 100msの各タイムアウト値は不変。ログはそれらの外側で実行 |
+| スタック | log_line: buf128B + vsnprintf(newlib-nano)≈400B、最深経路合計<1KB < スタック2KB(main) |
+| IWDG余裕 | 最悪ループ(DGS2行ログ2.3ms+BLEログ2.7ms+実送信+処理)<10ms ≪ 8.2s。余裕800倍以上 |
+
+結論: 遅延出力(リングバッファ)方式は不要と判断。ブロッキング出力は
+すべてメインループ文脈・ミリ秒オーダー・デッドラインなしのため。
+※フラッシュ/RAM実測はD0で行う(下記)。
+
+## 3b. D0: Debug/Release差分計測 (Mac/CubeIDEで実施)
+
+| 項目 | 計測方法 |
+|---|---|
+| フラッシュ/RAM使用量 | 両構成をビルドし CubeIDE Build Analyzer、または `arm-none-eabi-size Debug/HydroPaw.elf Release/HydroPaw.elf` |
+| スタック使用量 | Build Analyzer の Static Stack Analyzer(最深: main→LOG→vsnprintf 経路を確認) |
+| 測定周期 | 両構成でEVT_DATA間隔をnRF Connectのタイムスタンプで10点計測(期待: 1000ms±10ms, 差なし) |
+| STOP2移行時間 | `enter STOP2`ログ→電流降下までをオシロ/電流計で(Releaseはログ無しのためGPIOトグルかアプリ操作起点) |
+| 復帰後初回UART | T6bをDebug/Release両方で実施し成功率を比較 |
+| IWDG更新間隔 | ループ毎更新のため最悪値=最長ループ。LPUART行間隔の最大値をロジアナで確認(<50ms期待) |
+
+コード上の既知差分(実測前の予測、docs/14に実測値を記録):
+Debugは log.c+newlib-nano printf系で **+約2〜6KB flash / 静的RAM +約8B /
+スタック一時+約530B**、タイミングは上記表の通りミリ秒オーダーのみ。
+
+## 4. 診断ログリファレンス (Debugビルドのみ)
 
 LPUART1 115200bps。Releaseでは`HYDROPAW_LOG_DISABLE`により全て消える。
 

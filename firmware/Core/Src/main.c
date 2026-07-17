@@ -93,6 +93,9 @@ static void sensor_uart_tx(const uint8_t *data, size_t len)
 
 static void ble_uart_tx(const uint8_t *data, size_t len)
 {
+    /* 実送信を先に行う — 診断ログがBLE送信タイミングへ影響しないこと
+     * (非侵襲性レビュー docs/13 §4 参照)。ログは送信完了後に出す。 */
+    HAL_UART_Transmit(&huart2, (uint8_t *)data, (uint16_t)len, 100);
 #ifndef HYDROPAW_LOG_DISABLE
     /* 送信フレームの種別/SEQを可視化(EVT_ERRORはコードも) */
     if (len >= HPP_HEADER_SIZE && data[0] == HPP_SOF) {
@@ -105,7 +108,6 @@ static void ble_uart_tx(const uint8_t *data, size_t len)
         }
     }
 #endif
-    HAL_UART_Transmit(&huart2, (uint8_t *)data, (uint16_t)len, 100);
 }
 
 static void debug_uart_tx(const uint8_t *data, size_t len)
