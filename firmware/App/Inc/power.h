@@ -5,6 +5,7 @@
 #ifndef POWER_H
 #define POWER_H
 
+#include <stdbool.h>
 #include <stdint.h>
 
 /**
@@ -13,6 +14,13 @@
  * IWDG起動前(MX_IWDG_Init前)に呼ぶこと。
  */
 void power_option_bytes_ensure(void);
+
+/**
+ * IWDGがStopモード中フリーズする設定になっているか(オプションバイト)。
+ * falseのままSTOP2へ入ると約8.2秒毎にIWDGリセットが発生するため、
+ * mainはこの関数がtrueの場合のみSTOP2を実行すること。
+ */
+bool power_iwdg_frozen_in_stop(void);
 
 /** STOP2へ移行し、USART2 RX(スタートビット)で復帰後にクロックを再構成する。 */
 void power_enter_stop2(void);

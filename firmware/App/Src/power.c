@@ -43,6 +43,12 @@ void power_option_bytes_ensure(void)
     HAL_FLASH_Lock();
 }
 
+bool power_iwdg_frozen_in_stop(void)
+{
+    /* IWDG_STOPビット=1は「Stop中も動作」。0(FREEZE)なら安全にSTOP2可能 */
+    return (FLASH->OPTR & FLASH_OPTR_IWDG_STOP) == 0U;
+}
+
 void power_enter_stop2(void)
 {
     /* USART2をStop2からのWakeupソースに設定 (RXDスタートビットで復帰)。

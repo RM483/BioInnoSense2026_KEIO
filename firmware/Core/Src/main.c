@@ -209,15 +209,22 @@ int main(void)
         HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_RESET);
     }
 
-    /* SLEEP要求: STOP2へ (IWDGはオプションバイトでStop中フリーズ済み) */
+    /* SLEEP要求: IWDGがStop中フリーズ設定の時だけSTOP2へ。
+     * 未設定のままSTOP2に入ると約8.2秒毎にIWDGリセットが発生するため、
+     * その場合はRunのまま待機する(消費は増えるが誤動作しない)。
+     * どちらの場合もUSART2 RX(BLEコマンド)で通常動作へ復帰する。 */
     if (g_sm.sleep_requested) {
         g_sm.sleep_requested = false;
-        LOG("enter STOP2");
-        power_enter_stop2();
-        /* ここに来た時点でUSART2 RXにより復帰済み。受信ISRは継続動作。
-         * IWDGはStop中停止していたため即リフレッシュして再開する。 */
-        HAL_IWDG_Refresh(&hiwdg);
-        LOG("wake from STOP2");
+        if (power_iwdg_frozen_in_stop()) {
+            LOG("enter STOP2");
+            power_enter_stop2();
+            /* ここに来た時点でUSART2 RXにより復帰済み。受信ISRは継続動作。
+             * IWDGはStop中停止していたため即リフレッシュして再開する。 */
+            HAL_IWDG_Refresh(&hiwdg);
+            LOG("wake from STOP2");
+        } else {
+            LOG("STOP2 skipped: IWDG option bytes not frozen");
+        }
     }
     /* USER CODE END WHILE */
 

@@ -58,6 +58,9 @@ typedef struct {
     uint8_t     idle_line_count;  /**< IDLE中の予期しない測定行カウント */
     uint32_t    idle_first_line_ms;
     uint8_t     idle_stop_attempts;
+    /* 低電池通知 (閾値を跨いだ時に一度だけEVT_ERROR(E_LOW_BATTERY)) */
+    uint32_t    last_batt_check_ms;
+    bool        low_batt_sent;
 } sm_t;
 
 void sm_init(sm_t *sm, dgs2_t *sensor, ble_link_t *link,

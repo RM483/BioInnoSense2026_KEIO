@@ -37,7 +37,8 @@ static void ble_tx(const uint8_t *d, size_t n)
     }
 }
 
-static uint16_t fake_battery_mv(void) { return 3700; }
+static uint16_t g_batt_mv = 3700;
+static uint16_t fake_battery_mv(void) { return g_batt_mv; }
 
 /* ---- テストフィクスチャ ---- */
 static dgs2_t     g_sensor;
@@ -51,9 +52,23 @@ static void reset_capture(void)
     g_frame_count = 0;
 }
 
+/** 現在の捕捉分から type/payload[0] 一致のフレーム数を数える */
+static int count_errors_of(uint8_t code)
+{
+    int n = 0;
+    for (int i = 0; i < g_frame_count; i++) {
+        if (g_frames[i].type == HPP_EVT_ERROR &&
+            g_frames[i].payload[0] == code) {
+            n++;
+        }
+    }
+    return n;
+}
+
 static void setup(uint32_t now)
 {
     reset_capture();
+    g_batt_mv = 3700;
     hpp_decoder_init(&g_ble_dec);
     dgs2_init(&g_sensor, sensor_tx);
     ble_link_init(&g_link, ble_tx);
@@ -345,6 +360,51 @@ static void test_zero_calibration_only_in_idle(void)
     ASSERT_EQ(nak->payload[1], E_BUSY);
 }
 
+static void test_low_battery_notified_once_without_aborting(void)
+{
+    setup(0);
+    sm_on_sensor_line(&g_sm, VALID_LINE, 100);
+    uint8_t iv = 1;
+    inject_cmd(HPP_CMD_START_CONT, &iv, 1, 200);
+
+    g_batt_mv = 3100; /* 閾値(3300)未満へ低下 */
+    uint32_t now = 200;
+    int low_batt_events = 0;
+
+    /* 2分間測定を継続(データ+keep-aliveを1Hzで供給) */
+    while (now < 200 + 2U * CFG_BATT_CHECK_MS + 5000U) {
+        now += 1000;
+        reset_capture();
+        sm_on_sensor_line(&g_sm, VALID_LINE, now);
+        inject_cmd(HPP_CMD_GET_STATUS, NULL, 0, now);
+        sm_tick(&g_sm, now);
+        low_batt_events += count_errors_of(E_LOW_BATTERY);
+    }
+
+    ASSERT_EQ(low_batt_events, 1);          /* 一度だけ通知 */
+    ASSERT_EQ(g_sm.state, SM_MEASURING);    /* 測定は中断しない */
+
+    /* 回復(充電)後に再び低下すれば、もう一度だけ通知される */
+    g_batt_mv = 3600;
+    now += CFG_BATT_CHECK_MS + 1000;
+    sm_on_sensor_line(&g_sm, VALID_LINE, now);
+    inject_cmd(HPP_CMD_GET_STATUS, NULL, 0, now);
+    sm_tick(&g_sm, now);
+
+    g_batt_mv = 3100;
+    low_batt_events = 0;
+    uint32_t end = now + 2U * CFG_BATT_CHECK_MS + 5000U;
+    while (now < end) {
+        now += 1000;
+        reset_capture();
+        sm_on_sensor_line(&g_sm, VALID_LINE, now);
+        inject_cmd(HPP_CMD_GET_STATUS, NULL, 0, now);
+        sm_tick(&g_sm, now);
+        low_batt_events += count_errors_of(E_LOW_BATTERY);
+    }
+    ASSERT_EQ(low_batt_events, 1);
+}
+
 static void test_parse_failure_storm_stops_measurement(void)
 {
     setup(0);
@@ -381,6 +441,7 @@ int main(void)
     test_error_recovery_via_wake_sends_reset();
     test_idle_heals_unexpected_stream();
     test_zero_calibration_only_in_idle();
+    test_low_battery_notified_once_without_aborting();
     test_parse_failure_storm_stops_measurement();
     return TEST_SUMMARY();
 }

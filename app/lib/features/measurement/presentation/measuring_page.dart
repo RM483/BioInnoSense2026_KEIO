@@ -123,10 +123,19 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
                   ),
                   SizedBox(
                     width: 44,
-                    child: ble.status == BleStatus.reconnecting
-                        ? Icon(Icons.bluetooth_searching,
-                            size: 18, color: p.warn)
-                        : null,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (measure.lowBattery)
+                          Icon(Icons.battery_alert_outlined,
+                              size: 18, color: p.warn),
+                        if (ble.status == BleStatus.reconnecting) ...[
+                          const SizedBox(width: 4),
+                          Icon(Icons.bluetooth_searching,
+                              size: 18, color: p.warn),
+                        ],
+                      ],
+                    ),
                   ),
                 ],
               ),

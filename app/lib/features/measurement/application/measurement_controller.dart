@@ -20,12 +20,16 @@ class MeasureState {
     this.errorCode,
     this.summary,
     this.droppedFrames = 0,
+    this.lowBattery = false,
   });
 
   final MeasurePhase phase;
   final List<H2Sample> samples;
   final int? errorCode;
   final Measurement? summary;
+
+  /// デバイスの電池残量低下(E_LOW_BATTERY)。測定は継続し警告のみ表示。
+  final bool lowBattery;
 
   /// SEQ跳びから推定した欠測フレーム数(BLE切断・干渉の指標)
   final int droppedFrames;
@@ -49,6 +53,7 @@ class MeasureState {
     int? errorCode,
     Measurement? summary,
     int? droppedFrames,
+    bool? lowBattery,
   }) =>
       MeasureState(
         phase: phase ?? this.phase,
@@ -56,6 +61,7 @@ class MeasureState {
         errorCode: errorCode ?? this.errorCode,
         summary: summary ?? this.summary,
         droppedFrames: droppedFrames ?? this.droppedFrames,
+        lowBattery: lowBattery ?? this.lowBattery,
       );
 }
 
@@ -142,8 +148,13 @@ class MeasurementController extends Notifier<MeasureState> {
             state = state.copyWith(phase: MeasurePhase.measuring);
           }
         case Hpp.evtError:
-          state = state.copyWith(
-              phase: MeasurePhase.error, errorCode: f.errorCode);
+          // 低電池は警告であって測定失敗ではない — セッションを守る
+          if (f.errorCode == SensorException.lowBattery) {
+            state = state.copyWith(lowBattery: true);
+          } else {
+            state = state.copyWith(
+                phase: MeasurePhase.error, errorCode: f.errorCode);
+          }
         default:
           break;
       }

@@ -21,6 +21,8 @@
 #define CFG_MEASURE_MAX_MS           1800000U /* 連続測定の上限30分 */
 
 /* 電池 [mV] (VBAT = ADC×2 分圧) */
-#define CFG_BATT_LOW_MV              3300U
+#define CFG_BATT_LOW_MV              3300U  /* これ未満でE_LOW_BATTERY通知 */
+#define CFG_BATT_RECOVER_MV          3400U  /* これ以上へ回復で再警告を許可 */
+#define CFG_BATT_CHECK_MS            60000U /* 電池チェック周期 */
 
 #endif /* APP_CONFIG_H */

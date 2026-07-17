@@ -115,6 +115,27 @@ static void enter_sleep(sm_t *sm, uint32_t now)
     enter_state(sm, SM_SLEEP, now);
 }
 
+/** 低電池の監視。閾値を下回ったら一度だけEVT_ERROR(E_LOW_BATTERY)を送る。
+ *  測定は中断しない(アプリ側は警告表示のみ)。回復したら再警告を許可。 */
+static void check_battery(sm_t *sm, uint32_t now)
+{
+    if (now - sm->last_batt_check_ms < CFG_BATT_CHECK_MS) {
+        return;
+    }
+    sm->last_batt_check_ms = now;
+    uint16_t mv = sm->read_battery_mv();
+    if (mv == 0U) {
+        return; /* ADC読み取り失敗は判定しない */
+    }
+    if (mv < CFG_BATT_LOW_MV && !sm->low_batt_sent) {
+        /* detail = 電圧[0.1V単位] (例: 32 = 3.2V) */
+        ble_link_send_error(sm->link, E_LOW_BATTERY, (uint8_t)(mv / 100U));
+        sm->low_batt_sent = true;
+    } else if (mv >= CFG_BATT_RECOVER_MV) {
+        sm->low_batt_sent = false;
+    }
+}
+
 /* ---------- 公開API ---------- */
 
 void sm_init(sm_t *sm, dgs2_t *sensor, ble_link_t *link,
@@ -126,6 +147,7 @@ void sm_init(sm_t *sm, dgs2_t *sensor, ble_link_t *link,
     sm->read_battery_mv = read_battery_mv;
     sm->boot_ms = now;
     sm->last_ble_rx_ms = now;
+    sm->last_batt_check_ms = now;
     sm->interval_s = 1;
     stats_reset(sm, now);
     enter_state(sm, SM_SENSOR_INIT, now);
@@ -318,6 +340,7 @@ void sm_tick(sm_t *sm, uint32_t now)
         break;
 
     case SM_IDLE:
+        check_battery(sm, now);
         if (now - sm->last_ble_rx_ms > CFG_IDLE_TO_SLEEP_MS &&
             now - sm->state_since_ms > CFG_IDLE_TO_SLEEP_MS) {
             enter_sleep(sm, now); /* 省電力: 無通信で自動Sleep */
@@ -325,6 +348,7 @@ void sm_tick(sm_t *sm, uint32_t now)
         break;
 
     case SM_MEASURING: {
+        check_battery(sm, now);
         /* センサ無応答。開始直後は短い確認窓(CFG_SENSOR_CONFIRM_MS)で
          * トグル不発を早期検出する。 */
         uint32_t timeout = (sm->stats.n == 0U && sm->mode == SM_MODE_CONTINUOUS)
