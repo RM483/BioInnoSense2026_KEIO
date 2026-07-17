@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/constants/h2.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../dogs/application/dog_controller.dart';
@@ -53,15 +54,37 @@ class HistoryPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final p = context.palette;
     final history = ref.watch(historyProvider);
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.history)),
       body: history.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text(l10n.errorNetwork)),
+        loading: () => Center(
+          child: SizedBox(
+            width: 28,
+            height: 28,
+            child: CircularProgressIndicator(
+                strokeWidth: 2.2, color: p.textTertiary),
+          ),
+        ),
+        error: (e, _) => Center(
+          child: Text(l10n.errorNetwork,
+              style: AppText.body.copyWith(color: p.textSecondary)),
+        ),
         data: (items) => items.isEmpty
-            ? Center(child: Text(l10n.noMeasurementYet))
+            ? Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.timeline, size: 32, color: p.textTertiary),
+                    const SizedBox(height: 14),
+                    Text(l10n.noMeasurementYet,
+                        style: AppText.body
+                            .copyWith(color: p.textSecondary)),
+                  ],
+                ),
+              )
             : NotificationListener<ScrollEndNotification>(
                 onNotification: (n) {
                   if (n.metrics.extentAfter < 200) {
@@ -72,7 +95,7 @@ class HistoryPage extends ConsumerWidget {
                 child: ListView.separated(
                   padding: const EdgeInsets.all(24),
                   itemCount: items.length,
-                  separatorBuilder: (_, __) => const SizedBox(height: 12),
+                  separatorBuilder: (_, __) => const SizedBox(height: 10),
                   itemBuilder: (context, i) =>
                       _HistoryTile(measurement: items[i]),
                 ),
@@ -89,61 +112,76 @@ class _HistoryTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final p = context.palette;
     final m = measurement;
-    final df = DateFormat.yMMMd(
-        Localizations.localeOf(context).toLanguageTag());
+    final isHigh = m.avgPpm >= H2.highPpm;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final df = DateFormat.MMMEd(locale);
+    final tf = DateFormat.Hm(locale);
 
-    return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Row(
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(df.format(m.startedAt),
-                      style: const TextStyle(
-                          color: AppColors.onSurfaceVariant, fontSize: 14)),
-                  const SizedBox(height: 6),
-                  Text('${m.avgPpm.toStringAsFixed(1)} ${l10n.ppm}',
-                      style: Theme.of(context).textTheme.titleMedium),
-                  Text(
-                      '${l10n.peak} ${m.maxPpm.toStringAsFixed(1)} ・ '
-                      '${m.durationS ~/ 60}min',
-                      style: const TextStyle(
-                          color: AppColors.onSurfaceVariant, fontSize: 14)),
-                ],
-              ),
+    return AppCard(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                    '${df.format(m.startedAt)}  ${tf.format(m.startedAt)}',
+                    style:
+                        AppText.caption.copyWith(color: p.textTertiary)),
+                const SizedBox(height: 8),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.baseline,
+                  textBaseline: TextBaseline.alphabetic,
+                  children: [
+                    Text(m.avgPpm.toStringAsFixed(1),
+                        style: AppText.numeral.copyWith(
+                            fontSize: 24,
+                            color: isHigh ? p.warn : p.textPrimary)),
+                    const SizedBox(width: 5),
+                    Text(l10n.ppm,
+                        style: AppText.caption
+                            .copyWith(color: p.textTertiary)),
+                  ],
+                ),
+                const SizedBox(height: 4),
+                Text(
+                    '${l10n.peak} ${m.maxPpm.toStringAsFixed(1)} · '
+                    '${m.durationS ~/ 60}min',
+                    style:
+                        AppText.caption.copyWith(color: p.textSecondary)),
+              ],
             ),
-            // スパークライン
-            if (m.series.isNotEmpty)
-              SizedBox(
-                width: 96,
-                height: 44,
-                child: LineChart(
-                  LineChartData(
-                    gridData: const FlGridData(show: false),
-                    titlesData: const FlTitlesData(show: false),
-                    borderData: FlBorderData(show: false),
-                    lineTouchData: const LineTouchData(enabled: false),
-                    lineBarsData: [
-                      LineChartBarData(
-                        spots: [
-                          for (final s in m.series)
-                            FlSpot(s.timeMs / 1000.0, s.h2Ppm),
-                        ],
-                        isCurved: true,
-                        barWidth: 1.5,
-                        color: AppColors.primary,
-                        dotData: const FlDotData(show: false),
-                      ),
-                    ],
-                  ),
+          ),
+          // スパークライン
+          if (m.series.isNotEmpty)
+            SizedBox(
+              width: 92,
+              height: 40,
+              child: LineChart(
+                LineChartData(
+                  gridData: const FlGridData(show: false),
+                  titlesData: const FlTitlesData(show: false),
+                  borderData: FlBorderData(show: false),
+                  lineTouchData: const LineTouchData(enabled: false),
+                  lineBarsData: [
+                    LineChartBarData(
+                      spots: [
+                        for (final s in m.series)
+                          FlSpot(s.timeMs / 1000.0, s.h2Ppm),
+                      ],
+                      isCurved: true,
+                      barWidth: 1.5,
+                      color: isHigh ? p.warn : p.accent,
+                      dotData: const FlDotData(show: false),
+                    ),
+                  ],
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }

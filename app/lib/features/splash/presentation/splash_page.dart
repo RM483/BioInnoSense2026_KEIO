@@ -12,6 +12,8 @@ class SplashPage extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final p = context.palette;
+
     // 認証状態の初回解決を待って遷移
     ref.listen(authStateChangesProvider, (_, next) {
       next.whenData((user) {
@@ -20,20 +22,15 @@ class SplashPage extends ConsumerWidget {
       });
     });
 
-    return const Scaffold(
+    return Scaffold(
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.pets, size: 72, color: AppColors.primary),
-            SizedBox(height: 16),
+            Icon(Icons.pets, size: 44, color: p.accent),
+            const SizedBox(height: 16),
             Text('HydroPaw',
-                style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.primary)),
-            SizedBox(height: 48),
-            CircularProgressIndicator(),
+                style: AppText.largeTitle.copyWith(color: p.textPrimary)),
           ],
         ),
       ),

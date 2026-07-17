@@ -15,43 +15,46 @@ class SettingsPage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
+    final p = context.palette;
     final ble = ref.watch(bleControllerProvider);
+    final connected = ble.status == BleStatus.connected;
 
     return Scaffold(
       appBar: AppBar(title: Text(l10n.settings)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
-          Card(
+          AppCard(
+            padding: EdgeInsets.zero,
             child: Column(
               children: [
-                ListTile(
-                  leading: const Icon(Icons.bluetooth,
-                      color: AppColors.primary),
-                  title: Text(l10n.deviceManagement),
-                  subtitle: Text(ble.status == BleStatus.connected
+                _SettingsRow(
+                  icon: Icons.bluetooth,
+                  title: l10n.deviceManagement,
+                  subtitle: connected
                       ? '${l10n.connected}'
-                        '${ble.batteryMv != null ? ' ・ ${(ble.batteryMv! / 1000).toStringAsFixed(2)}V' : ''}'
-                      : l10n.disconnected),
-                  trailing: const Icon(Icons.chevron_right),
+                          '${ble.batteryMv != null ? ' · ${l10n.battery} ${(ble.batteryMv! / 1000).toStringAsFixed(2)}V' : ''}'
+                      : l10n.disconnected,
+                  subtitleColor: connected ? p.success : null,
                   onTap: () => context.push(Routes.connect),
                 ),
-                const Divider(height: 1, color: AppColors.outline),
-                ListTile(
-                  leading: const Icon(Icons.language,
-                      color: AppColors.primary),
-                  title: Text(l10n.language),
-                  subtitle: const Text('システム設定に従う'),
+                Divider(height: 1, indent: 56, color: p.hairline),
+                _SettingsRow(
+                  icon: Icons.language,
+                  title: l10n.language,
+                  subtitle: l10n.followSystem,
                 ),
               ],
             ),
           ),
-          const SizedBox(height: 24),
-          Card(
-            child: ListTile(
-              leading: const Icon(Icons.logout, color: AppColors.error),
-              title: Text(l10n.logout,
-                  style: const TextStyle(color: AppColors.error)),
+          const SizedBox(height: 16),
+          AppCard(
+            padding: EdgeInsets.zero,
+            child: _SettingsRow(
+              icon: Icons.logout,
+              title: l10n.logout,
+              titleColor: p.danger,
+              iconColor: p.danger,
               onTap: () async {
                 await ref.read(bleControllerProvider.notifier).disconnect();
                 await ref.read(authControllerProvider.notifier).signOut();
@@ -59,6 +62,62 @@ class SettingsPage extends ConsumerWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _SettingsRow extends StatelessWidget {
+  const _SettingsRow({
+    required this.icon,
+    required this.title,
+    this.subtitle,
+    this.subtitleColor,
+    this.titleColor,
+    this.iconColor,
+    this.onTap,
+  });
+
+  final IconData icon;
+  final String title;
+  final String? subtitle;
+  final Color? subtitleColor;
+  final Color? titleColor;
+  final Color? iconColor;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        child: Row(
+          children: [
+            Icon(icon, size: 21, color: iconColor ?? p.textSecondary),
+            const SizedBox(width: 16),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title,
+                      style: AppText.bodyMedium
+                          .copyWith(color: titleColor ?? p.textPrimary)),
+                  if (subtitle != null) ...[
+                    const SizedBox(height: 2),
+                    Text(subtitle!,
+                        style: AppText.caption.copyWith(
+                            color: subtitleColor ?? p.textSecondary)),
+                  ],
+                ],
+              ),
+            ),
+            if (onTap != null)
+              Icon(Icons.chevron_right, size: 18, color: p.textTertiary),
+          ],
+        ),
       ),
     );
   }

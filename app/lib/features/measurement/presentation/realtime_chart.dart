@@ -1,7 +1,9 @@
 /// リアルタイム折れ線グラフ (fl_chart)。直近300点を描画。
+/// 装飾は最小限: 細い線・薄い水平グリッド・閾値の破線のみ。
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 
+import '../../../core/constants/h2.dart';
 import '../../../core/theme/app_theme.dart';
 import '../domain/measurement.dart';
 
@@ -9,7 +11,7 @@ class RealtimeChart extends StatelessWidget {
   const RealtimeChart({
     super.key,
     required this.samples,
-    this.thresholdPpm = 20.0,
+    this.thresholdPpm = H2.highPpm,
     this.window = 300,
   });
 
@@ -19,6 +21,7 @@ class RealtimeChart extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     final visible = samples.length <= window
         ? samples
         : samples.sublist(samples.length - window);
@@ -35,6 +38,8 @@ class RealtimeChart extends StatelessWidget {
       ...visible.map((s) => s.h2Ppm * 1.1),
     ].reduce((a, b) => a > b ? a : b);
 
+    final labelStyle = AppText.caption.copyWith(color: p.textTertiary);
+
     return LineChart(
       LineChartData(
         minY: 0,
@@ -42,49 +47,57 @@ class RealtimeChart extends StatelessWidget {
         gridData: FlGridData(
           drawVerticalLine: false,
           getDrawingHorizontalLine: (_) =>
-              const FlLine(color: AppColors.outline, strokeWidth: 1),
+              FlLine(color: p.hairline, strokeWidth: 1),
         ),
-        titlesData: const FlTitlesData(
-          topTitles: AxisTitles(),
-          rightTitles: AxisTitles(),
+        titlesData: FlTitlesData(
+          topTitles: const AxisTitles(),
+          rightTitles: const AxisTitles(),
           leftTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 44),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 40,
+              getTitlesWidget: (v, meta) => Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: Text(meta.formattedValue,
+                    style: labelStyle, textAlign: TextAlign.right),
+              ),
+            ),
           ),
           bottomTitles: AxisTitles(
-            sideTitles: SideTitles(showTitles: true, reservedSize: 28),
+            sideTitles: SideTitles(
+              showTitles: true,
+              reservedSize: 24,
+              getTitlesWidget: (v, meta) => Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(meta.formattedValue, style: labelStyle),
+              ),
+            ),
           ),
         ),
         borderData: FlBorderData(show: false),
         extraLinesData: ExtraLinesData(horizontalLines: [
           HorizontalLine(
             y: thresholdPpm,
-            color: AppColors.accent,
-            strokeWidth: 1.5,
-            dashArray: [8, 4],
+            color: p.warn.withOpacity(0.6),
+            strokeWidth: 1,
+            dashArray: [6, 5],
           ),
         ]),
         lineBarsData: [
-          // 有効サンプル: 青のライン + 面グラデーション
+          // 有効サンプル: アクセント色の細線 + ごく薄い面
           LineChartBarData(
             spots: spots,
             isCurved: true,
-            curveSmoothness: 0.2,
-            barWidth: 2.5,
-            color: AppColors.primary,
+            curveSmoothness: 0.18,
+            barWidth: 2,
+            color: p.accent,
             dotData: const FlDotData(show: false),
             belowBarData: BarAreaData(
               show: true,
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [
-                  AppColors.primary.withOpacity(0.20),
-                  AppColors.primary.withOpacity(0.0),
-                ],
-              ),
+              color: p.accent.withOpacity(0.06),
             ),
           ),
-          // 異常フラグ付きサンプル: グレーの点のみ(統計除外を視覚化)
+          // 異常フラグ付きサンプル: 三次色の点のみ(統計除外を可視化)
           LineChartBarData(
             spots: invalidSpots,
             barWidth: 0,
@@ -92,8 +105,8 @@ class RealtimeChart extends StatelessWidget {
             dotData: FlDotData(
               show: true,
               getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
-                radius: 2.5,
-                color: AppColors.onSurfaceVariant,
+                radius: 2,
+                color: p.textTertiary,
                 strokeWidth: 0,
               ),
             ),

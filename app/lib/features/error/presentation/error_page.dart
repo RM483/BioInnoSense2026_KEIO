@@ -28,14 +28,15 @@ class ErrorPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final p = context.palette;
     final (icon, message) = switch (kind) {
       ErrorKind.sensorTimeout =>
-        (Icons.sensors_off, l10n.errorSensorTimeout),
+        (Icons.sensors_off_outlined, l10n.errorSensorTimeout),
       ErrorKind.bleDisconnected =>
-        (Icons.bluetooth_disabled, l10n.errorBleDisconnected),
-      ErrorKind.network => (Icons.wifi_off, l10n.errorNetwork),
+        (Icons.bluetooth_disabled_outlined, l10n.errorBleDisconnected),
+      ErrorKind.network => (Icons.wifi_off_outlined, l10n.errorNetwork),
       ErrorKind.lowBattery =>
-        (Icons.battery_alert, l10n.errorLowBattery),
+        (Icons.battery_alert_outlined, l10n.errorLowBattery),
       ErrorKind.unknown => (Icons.error_outline, l10n.errorTitle),
     };
 
@@ -47,24 +48,33 @@ class ErrorPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              Icon(icon, size: 80, color: AppColors.onSurfaceVariant),
-              const SizedBox(height: 24),
+              Container(
+                width: 76,
+                height: 76,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: p.cardElevated,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, size: 34, color: p.textSecondary),
+              ),
+              const SizedBox(height: 28),
               Text(l10n.errorTitle,
                   textAlign: TextAlign.center,
-                  style: Theme.of(context).textTheme.headlineMedium),
-              const SizedBox(height: 12),
+                  style: AppText.title.copyWith(color: p.textPrimary)),
+              const SizedBox(height: 10),
               Text(message,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
-                      color: AppColors.onSurfaceVariant, height: 1.6)),
-              const SizedBox(height: 48),
+                  style: AppText.body
+                      .copyWith(color: p.textSecondary, height: 1.6)),
+              const SizedBox(height: 44),
               FilledButton(
                 onPressed: () => context.canPop()
                     ? context.pop()
                     : context.go(Routes.home),
                 child: Text(l10n.retry),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               TextButton(
                 onPressed: () => context.go(Routes.home),
                 child: Text(l10n.backToHome),
