@@ -280,8 +280,9 @@ static void test_sleep_wake_via_frame(void)
     ASSERT_EQ(g_sensor_tx[0], '\n'); /* DGS2 Wakeバイト */
     const hpp_frame_t *st = last_frame_of(HPP_EVT_STATUS);
     ASSERT_TRUE(st != NULL);
-    ASSERT_EQ(st->len, 12); /* 拡張ステータス(診断統計込み) */
+    ASSERT_EQ(st->len, 14); /* 拡張ステータス(診断統計+arq_drops込み) */
     ASSERT_EQ(hpp_get_u16(&st->payload[1]), 3700); /* battery */
+    ASSERT_EQ(hpp_get_u16(&st->payload[12]), 0);   /* arq_drops */
 }
 
 static void test_idle_auto_sleep(void)
@@ -422,6 +423,207 @@ static void test_parse_failure_storm_stops_measurement(void)
     ASSERT_EQ(err->payload[0], E_SENSOR_PARSE);
 }
 
+/* ================= v2: 呼気セッション (docs/18 §3) ================= */
+
+static uint32_t g_t; /* 進行時刻 */
+
+/** 可変ppb/RHのセンサ行を1秒進めて注入し、tickも回す */
+static void feed_line(int32_t ppb, int rh_x100)
+{
+    char buf[128];
+    snprintf(buf, sizeof(buf), "032122030234, %ld, 2500, %d, 32291, 26636, 20390",
+             (long)ppb, rh_x100);
+    g_t += 1000;
+    sm_on_sensor_line(&g_sm, buf, g_t);
+    sm_tick(&g_sm, g_t);
+}
+
+/** 静穏サンプル(±40ppbの揺らぎ — 固着検出も回避) */
+static void feed_quiet(int n, int32_t base)
+{
+    for (int i = 0; i < n; i++) {
+        feed_line(base + ((i & 1) ? 40 : -40), 4000);
+    }
+}
+
+static int count_of(uint8_t type)
+{
+    int n = 0;
+    for (int i = 0; i < g_frame_count; i++) {
+        if (g_frames[i].type == type) n++;
+    }
+    return n;
+}
+
+/** boot後ウォームアップ済みの状態で呼気セッションをREADYまで進める */
+static void breath_session_to_ready(void)
+{
+    setup(0);
+    sm_on_sensor_line(&g_sm, VALID_LINE, 100);
+    ASSERT_EQ(g_sm.state, SM_IDLE);
+    g_t = CFG_WARMUP_MS + 10000U; /* ウォームアップ経過済み */
+    inject_cmd(HPP_CMD_BREATH, NULL, 0, g_t);
+    ASSERT_EQ(g_sm.state, SM_WARMUP);
+    ASSERT_TRUE(last_frame_of(HPP_ACK) != NULL);
+    feed_quiet(12, 800); /* ベースライン学習→ロック→READY昇格 */
+    ASSERT_EQ(g_sm.state, SM_READY);
+}
+
+static void test_breath_full_flow_emits_result(void)
+{
+    breath_session_to_ready();
+    reset_capture();
+
+    /* 呼気: 立上り→プラトー(RH+6%)→回復 */
+    int32_t rise[] = {2300, 3400, 4600, 5600, 6400, 6800};
+    for (int i = 0; i < 6; i++) feed_line(rise[i], 4600);
+    ASSERT_EQ(g_sm.state, SM_BREATH);
+    for (int i = 0; i < 12; i++) feed_line(6800 + ((i & 1) ? 100 : -100), 4600);
+    for (int i = 0; i < 12 && g_sm.state == SM_BREATH; i++) {
+        feed_line(850, 4600);
+    }
+    /* ANALYZE→VALIDATE→REPORT→IDLE (各1tick) */
+    for (int i = 0; i < 4; i++) sm_tick(&g_sm, ++g_t);
+    ASSERT_EQ(g_sm.state, SM_IDLE);
+
+    const hpp_frame_t *r = last_frame_of(HPP_EVT_RESULT);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_EQ(r->len, 30);
+    ASSERT_TRUE(r->payload[1] >= 90);                 /* quality */
+    ASSERT_EQ(r->payload[2], 100);                    /* confidence */
+    ASSERT_TRUE((r->payload[3] & 0x02) != 0);         /* RH_OK */
+    ASSERT_TRUE((r->payload[3] & 0x10) != 0);         /* WARMUP_OK */
+    ASSERT_TRUE((int32_t)hpp_get_u32(&r->payload[8]) > 4000); /* peak */
+    /* フェーズ実況が届いている(BREATH/ANALYZE/DONE) */
+    ASSERT_TRUE(count_of(HPP_EVT_PHASE) >= 3);
+    /* センサは停止トグル済み(開始1回+停止1回の'C') */
+    int c_count = 0;
+    for (size_t i = 0; i < g_sensor_tx_len; i++) {
+        if (g_sensor_tx[i] == 'C') c_count++;
+    }
+    ASSERT_TRUE(c_count >= 1); /* 停止トグル(開始分はreset_capture前) */
+}
+
+static void test_breath_ready_timeout_aborts_with_reason(void)
+{
+    breath_session_to_ready();
+    /* 呼気が来ないままREADYタイムアウト。EVT_DATAが1Hzで流れ続けるため
+     * 捕捉バッファ溢れを避けて毎秒リセットし、逐次カウントする */
+    int no_breath = 0, aborted_phase = 0;
+    uint32_t deadline = g_t + CFG_BAP_READY_TIMEOUT_MS + 2000U;
+    while (g_t < deadline && g_sm.state == SM_READY) {
+        reset_capture();
+        feed_quiet(1, 800);
+        no_breath += count_errors_of(E_NO_BREATH);
+        const hpp_frame_t *ph = last_frame_of(HPP_EVT_PHASE);
+        if (ph != NULL && ph->payload[0] == HPP_PHASE_ABORTED) {
+            aborted_phase++;
+        }
+    }
+    ASSERT_EQ(g_sm.state, SM_IDLE);
+    ASSERT_EQ(no_breath, 1);
+    ASSERT_EQ(aborted_phase, 1);
+}
+
+static void test_breath_low_quality_auto_retry_once(void)
+{
+    breath_session_to_ready();
+    reset_capture();
+
+    /* 低品質呼気: RH上昇なし + 孤立スパイク4発(外れ値率超過) */
+    int32_t rise[] = {2300, 3400, 4600, 5600, 6400, 6800};
+    for (int i = 0; i < 6; i++) feed_line(rise[i], 4010);
+    ASSERT_EQ(g_sm.state, SM_BREATH);
+    for (int i = 0; i < 4; i++) {
+        feed_line(25000, 4010);           /* 孤立スパイク */
+        feed_line(6800, 4010);
+        feed_line(6750, 4010);
+    }
+    for (int i = 0; i < 12 && g_sm.state == SM_BREATH; i++) {
+        feed_line(850, 4010);
+    }
+    sm_tick(&g_sm, ++g_t); /* ANALYZE */
+    sm_tick(&g_sm, ++g_t); /* VALIDATE → 自動再測定 */
+    ASSERT_EQ(g_sm.state, SM_READY);
+    ASSERT_EQ(g_sm.bap.retries, 1);
+    const hpp_frame_t *ph = last_frame_of(HPP_EVT_PHASE);
+    ASSERT_TRUE(ph != NULL);
+    ASSERT_EQ(ph->payload[0], HPP_PHASE_RETRY);
+
+    /* 2回目も低品質 → 再々測定はせず、推奨フラグ付きで報告 */
+    reset_capture();
+    for (int i = 0; i < 6; i++) feed_line(rise[i], 4010);
+    for (int i = 0; i < 4; i++) {
+        feed_line(25000, 4010);
+        feed_line(6800, 4010);
+        feed_line(6750, 4010);
+    }
+    for (int i = 0; i < 12 && g_sm.state == SM_BREATH; i++) {
+        feed_line(850, 4010);
+    }
+    for (int i = 0; i < 4; i++) sm_tick(&g_sm, ++g_t);
+    ASSERT_EQ(g_sm.state, SM_IDLE);
+    const hpp_frame_t *r = last_frame_of(HPP_EVT_RESULT);
+    ASSERT_TRUE(r != NULL);
+    ASSERT_TRUE((r->payload[3] & 0x01) != 0); /* REMEASURE */
+    ASSERT_TRUE((r->payload[3] & 0x08) != 0); /* RETRIED */
+}
+
+static void test_result_arq_redelivers_until_acked(void)
+{
+    breath_session_to_ready();
+
+    int32_t rise[] = {2300, 3400, 4600, 5600, 6400, 6800};
+    for (int i = 0; i < 6; i++) feed_line(rise[i], 4600);
+    for (int i = 0; i < 12; i++) feed_line(6800 + ((i & 1) ? 100 : -100), 4600);
+    for (int i = 0; i < 12 && g_sm.state == SM_BREATH; i++) {
+        feed_line(850, 4600);
+    }
+    reset_capture();
+    for (int i = 0; i < 4; i++) sm_tick(&g_sm, ++g_t);
+    ASSERT_EQ(count_of(HPP_EVT_RESULT), 1); /* 初回送信 */
+    const hpp_frame_t *r1 = last_frame_of(HPP_EVT_RESULT);
+    uint8_t seq = r1->seq;
+
+    /* ACKが来ない(切断相当) → 同一SEQで再送される */
+    sm_tick(&g_sm, g_t + CFG_ARQ_TIMEOUT_MS + 10U);
+    ASSERT_EQ(count_of(HPP_EVT_RESULT), 2);
+    const hpp_frame_t *r2 = last_frame_of(HPP_EVT_RESULT);
+    ASSERT_EQ(r2->seq, seq);
+
+    /* アプリがACK_EVT → 以後再送されない */
+    uint8_t ack_seq = seq;
+    inject_cmd(HPP_CMD_ACK_EVT, &ack_seq, 1, g_t + CFG_ARQ_TIMEOUT_MS + 20U);
+    sm_tick(&g_sm, g_t + 5U * CFG_ARQ_TIMEOUT_MS);
+    ASSERT_EQ(count_of(HPP_EVT_RESULT), 2);
+}
+
+static void test_breath_stop_command_aborts_safely(void)
+{
+    breath_session_to_ready();
+    reset_capture();
+    inject_cmd(HPP_CMD_STOP, NULL, 0, g_t + 100U);
+    ASSERT_EQ(g_sm.state, SM_IDLE);
+    ASSERT_TRUE(last_frame_of(HPP_ACK) != NULL);
+    /* 部分結果は送らない(破棄) */
+    ASSERT_EQ(count_of(HPP_EVT_RESULT), 0);
+    /* センサの連続測定は停止トグル済み */
+    ASSERT_TRUE(strchr(g_sensor_tx, 'C') != NULL);
+}
+
+static void test_breath_rejected_when_busy(void)
+{
+    setup(0);
+    sm_on_sensor_line(&g_sm, VALID_LINE, 100);
+    uint8_t iv = 1;
+    inject_cmd(HPP_CMD_START_CONT, &iv, 1, 200); /* ラボモード実行中 */
+    reset_capture();
+    inject_cmd(HPP_CMD_BREATH, NULL, 0, 300);
+    const hpp_frame_t *nak = last_frame_of(HPP_NAK);
+    ASSERT_TRUE(nak != NULL);
+    ASSERT_EQ(nak->payload[1], E_BUSY);
+}
+
 int main(void)
 {
     printf("test_state_machine\n");
@@ -443,5 +645,12 @@ int main(void)
     test_zero_calibration_only_in_idle();
     test_low_battery_notified_once_without_aborting();
     test_parse_failure_storm_stops_measurement();
+    /* v2: 呼気セッション */
+    test_breath_full_flow_emits_result();
+    test_breath_ready_timeout_aborts_with_reason();
+    test_breath_low_quality_auto_retry_once();
+    test_result_arq_redelivers_until_acked();
+    test_breath_stop_command_aborts_safely();
+    test_breath_rejected_when_busy();
     return TEST_SUMMARY();
 }

@@ -255,8 +255,8 @@ int main(void)
         logged_state = g_sm.state;
     }
 
-    /* 状態LED: MEASURING=点灯, ERROR=点滅, その他=消灯 */
-    if (g_sm.state == SM_MEASURING) {
+    /* 状態LED: 測定中(ラボ/呼気)=点灯, ERROR=点滅, その他=消灯 */
+    if (g_sm.state == SM_MEASURING || sm_in_breath_session(&g_sm)) {
         HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin, GPIO_PIN_SET);
     } else if (g_sm.state == SM_ERROR) {
         HAL_GPIO_WritePin(LED_STATUS_GPIO_Port, LED_STATUS_Pin,
