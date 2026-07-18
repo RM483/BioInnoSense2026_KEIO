@@ -151,6 +151,60 @@ void main() {
     expect(m.series, isNotEmpty);
   }, timeout: const Timeout(Duration(seconds: 30)));
 
+  test('呼気セッション: startBreathで結果が自動保存され、品質スコアが付く',
+      () async {
+    // タイムライン短縮Mock(18tick×30ms)で高速化
+    ble.dispose();
+    ble = MockBleRepository(seed: 3, breathTickMs: 30);
+    container.dispose();
+    container = ProviderContainer(overrides: [
+      bleRepositoryProvider.overrideWithValue(ble),
+      measurementRepositoryProvider.overrideWithValue(repo),
+      appAnalyticsProvider.overrideWithValue(const NoopAnalytics()),
+    ]);
+    await ble.connect('mock');
+
+    final controller =
+        container.read(measurementControllerProvider.notifier);
+    await controller.startBreath(dogId: 'dog-1', deviceId: 'device-1');
+    expect(container.read(measurementControllerProvider).breathMode, isTrue);
+
+    // WARMUP→READY→呼気→解析→RESULT(ARQ) が自動で完結する
+    await Future<void>.delayed(const Duration(milliseconds: 1200));
+    final state = container.read(measurementControllerProvider);
+    expect(state.phase, MeasurePhase.saved);
+    expect(repo.saved, hasLength(1));
+    final m = repo.saved.first;
+    expect(m.mode, 'breath');
+    expect(m.quality, greaterThanOrEqualTo(80));
+    expect(m.confidence, 100);
+    expect(m.hasQuality, isTrue);
+    expect(m.remeasureAdvised, isFalse);
+    expect(m.aucPpbS, greaterThan(0));
+  });
+
+  test('EVT_RESULTのARQ再送(同一SEQ)は重複保存されない', () async {
+    final controller =
+        container.read(measurementControllerProvider.notifier);
+    await controller.startBreath(dogId: 'dog-1', deviceId: 'device-1');
+
+    // FWのARQ再送を模擬: 同一SEQのEVT_RESULTを3回注入
+    final p = Uint8List(30);
+    p[0] = 1; // session
+    p[1] = 91; // quality
+    p[2] = 100; // confidence
+    p[3] = 0x12; // RH_OK|WARMUP_OK
+    final frame = HppFrame(Hpp.evtResult, 200, p);
+    ble.debugEmitFrame(frame);
+    ble.debugEmitFrame(frame);
+    ble.debugEmitFrame(frame);
+    await Future<void>.delayed(const Duration(milliseconds: 200));
+
+    expect(repo.saved, hasLength(1)); // SEQ重複排除が効いている
+    expect(container.read(measurementControllerProvider).phase,
+        MeasurePhase.saved);
+  });
+
   test('再接続後: EVT_STATUS(測定中)でUIがmeasuringへ再同期する', () async {
     final controller =
         container.read(measurementControllerProvider.notifier);

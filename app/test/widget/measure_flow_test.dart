@@ -139,7 +139,8 @@ void main() {
     await teardownBle(tester, MeasuringPage);
   });
 
-  testWidgets('終了→結果画面へ遷移し、保存される(意味の言葉で表示)', (tester) async {
+  testWidgets('呼気セッション: 自動で解析→結果へ遷移し、品質つきで保存される',
+      (tester) async {
     await dogs.addDog(const Dog(id: '', name: 'ポチ'));
     await tester.pumpWidget(
         harness(ble: ble, dogs: dogs, measurements: measurements));
@@ -150,17 +151,20 @@ void main() {
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, const Duration(milliseconds: 100));
-    await settle(tester, const Duration(milliseconds: 2200));
 
-    await tester.tap(find.text('終了する'));
-    await settle(tester, const Duration(milliseconds: 300)); // ACK+summary
-    // 「解析しています…」の間(最低1.2s)を経て結果へ
-    expect(find.text('解析しています…'), findsOneWidget);
-    await settle(tester, const Duration(milliseconds: 1400));
+    // Mockの呼気タイムライン(約18s)をFWの実況どおり進める。
+    // ユーザー操作なしで WARMUP→READY→呼気→解析→結果 が完結する。
+    for (var i = 0; i < 20; i++) {
+      await settle(tester, const Duration(milliseconds: 1000));
+      if (find.text('測定できました').evaluate().isNotEmpty) break;
+    }
     await settle(tester, const Duration(milliseconds: 700)); // 遷移完了
 
     expect(find.text('測定できました'), findsOneWidget);
     expect(measurements.saved, hasLength(1)); // Firestore(メモリ)に保存済み
+    expect(measurements.saved.first.quality, greaterThanOrEqualTo(80));
+    expect(measurements.saved.first.mode, 'breath');
+    expect(find.textContaining('測定の質'), findsOneWidget); // 品質の言葉化
     expect(find.text('ホームに戻る'), findsOneWidget);
 
     await teardownBle(tester, ResultPage);
@@ -201,8 +205,8 @@ void main() {
     await settle(tester, const Duration(milliseconds: 800));
     await settle(tester, const Duration(milliseconds: 200));
     expect(find.byIcon(Icons.bluetooth_searching), findsNothing);
-    // 測定画面が保たれている
-    expect(find.text('終了する'), findsOneWidget);
+    // 測定画面が保たれている(呼気モードのボタンは「中止する」)
+    expect(find.text('中止する'), findsOneWidget);
     expect(find.byKey(const ValueKey('h2-value')), findsOneWidget);
 
     await teardownBle(tester, MeasuringPage);
