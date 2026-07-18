@@ -47,6 +47,9 @@ class Measurement with _$Measurement {
     @Default(-1) int quality, // Q: この測定は信頼できるか (0-100)
     @Default(-1) int confidence, // C: 計測器は健全か (0-100)
     @Default(0) int qualityFlags, // Hpp.rf* ビットマスク
+    // 研究用の呼気特徴量(卒論の解析でエクスポートする — レビューF6)
+    @Default(0) int aucPpbS, // 総排出量に比例 ΣΔ·1s
+    @Default(0) int riseDs, // 10→90%立上り [0.1s]
   }) = _Measurement;
 
   const Measurement._();

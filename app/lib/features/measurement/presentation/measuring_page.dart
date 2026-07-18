@@ -98,6 +98,11 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
     final level = latest == null
         ? null
         : HealthAssessment.levelForPpm(latest.h2Ppm);
+    // 呼気前(WARMUP/READY)は「安定」等の状態語を出さない —
+    // まだ呼気を測っていないのに状態を断定すると誤解を生む(レビューF5)
+    final showLevelWord = !measure.breathMode ||
+        measure.devicePhase == Hpp.phaseBreath ||
+        measure.devicePhase == Hpp.phaseAnalyze;
     // 「解析しています…」= FWのANALYZE実況 or 終了処理〜結果表示の間
     final analyzing = measure.phase == MeasurePhase.stopping ||
         measure.phase == MeasurePhase.saved ||
@@ -196,15 +201,17 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
                                     duration: const Duration(
                                         milliseconds: 300),
                                     child: Text(
-                                      latest == null
+                                      latest == null || !showLevelWord
                                           ? '…'
                                           : level!.shortLabel(l10n),
-                                      key: ValueKey(level),
+                                      key: ValueKey(
+                                          '$level-$showLevelWord'),
                                       style: AppText.title.copyWith(
                                           fontSize: 24,
-                                          color: latest == null
+                                          color: latest == null ||
+                                                  !showLevelWord
                                               ? p.textTertiary
-                                              : level.color(p)),
+                                              : level!.color(p)),
                                     ),
                                   ),
                                   if (latest != null) ...[

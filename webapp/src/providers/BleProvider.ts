@@ -130,14 +130,16 @@ export class BleProvider implements DataProvider {
     )
   }
 
-  /** 信頼配送イベント(EVT_RESULT/SUMMARY/ERROR)の重複排除済みSEQ */
-  private ackedSeqs = new Set<number>()
+  /** 信頼配送イベントの重複排除済みSEQ。8bit巡回のため直近16件のみ保持
+   *  (無制限だとSEQ再利用時に新フレームを誤って捨てる — レビューF3) */
+  private ackedSeqs: number[] = []
 
   /** 信頼配送イベントを受領: ACK_EVTを返し、ARQ再送(重複)ならfalse */
   private ackReliable(seq: number): boolean {
     void this.send(HPP.cmdAckEvt, [seq]).catch(() => {})
-    if (this.ackedSeqs.has(seq)) return false
-    this.ackedSeqs.add(seq)
+    if (this.ackedSeqs.includes(seq)) return false
+    this.ackedSeqs.push(seq)
+    if (this.ackedSeqs.length > 16) this.ackedSeqs.shift()
     return true
   }
 

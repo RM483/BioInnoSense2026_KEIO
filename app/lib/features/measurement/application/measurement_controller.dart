@@ -88,7 +88,10 @@ class MeasurementController extends Notifier<MeasureState> {
 
   /// 信頼配送イベント(EVT_RESULT等)の重複排除。
   /// FWのARQは同一SEQで再送するため、受信済みSEQは処理せずACKだけ返す。
-  final _ackedSeqs = <int>{};
+  /// SEQは8bitで巡回するため直近16件だけ保持する — 無制限に貯めると
+  /// 256フレーム後に再利用されたSEQの新フレームを誤って捨てる(レビューF3)。
+  final _ackedSeqs = <int>[];
+  static const _ackedSeqsMax = 16;
 
   static const _ackTimeout = Duration(milliseconds: 300);
   static const _ackRetries = 2;
@@ -186,6 +189,7 @@ class MeasurementController extends Notifier<MeasureState> {
     unawaited(_ble.send(Hpp.cmdAckEvt, [f.seq]).catchError((_) {}));
     if (_ackedSeqs.contains(f.seq)) return false;
     _ackedSeqs.add(f.seq);
+    if (_ackedSeqs.length > _ackedSeqsMax) _ackedSeqs.removeAt(0);
     return true;
   }
 
@@ -199,6 +203,10 @@ class MeasurementController extends Notifier<MeasureState> {
         case Hpp.evtResult:
           if (!_ackReliable(f)) break;
           unawaited(_saveBreathResult(f));
+        case Hpp.evtSummary:
+          // FW v1.2はサマリも信頼配送 — ACKを返す(処理はstopAndSaveの
+          // future側。ACKしないとFWが5回再送しdropを計上する — レビューF4)
+          _ackReliable(f);
         case Hpp.evtData:
           final sample = H2Sample(
             timeMs: f.dataTimeMs,
@@ -252,6 +260,8 @@ class MeasurementController extends Notifier<MeasureState> {
       quality: f.resultQuality,
       confidence: f.resultConfidence,
       qualityFlags: f.resultFlags,
+      aucPpbS: f.resultAucPpbS,
+      riseDs: (f.resultRiseS * 10).round(),
     );
     try {
       if (_dogId.isNotEmpty) {

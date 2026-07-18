@@ -16,9 +16,16 @@ import 'ble_service.dart';
 import 'hpp_codec.dart';
 
 class MockBleRepository implements BleRepository {
-  MockBleRepository({this.seed, this.emitSummary = true});
+  MockBleRepository({
+    this.seed,
+    this.emitSummary = true,
+    this.breathTickMs = 1000,
+  });
 
   final int? seed;
+
+  /// 呼気セッション模倣の1tick長。テストでは短縮して高速化する。
+  final int breathTickMs;
 
   /// falseにするとCMD_STOPでEVT_SUMMARYを返さない
   /// (サマリ喪失時のローカル統計フォールバックのテスト用)。
@@ -261,8 +268,8 @@ class MockBleRepository implements BleRepository {
     _sessionStart = DateTime.now();
     _measuring = true;
     _emitPhase(Hpp.phaseWarmup);
-    _breathTimer =
-        Timer.periodic(const Duration(seconds: 1), (_) => _breathStep());
+    _breathTimer = Timer.periodic(
+        Duration(milliseconds: breathTickMs), (_) => _breathStep());
   }
 
   void _stopBreathSession() {
