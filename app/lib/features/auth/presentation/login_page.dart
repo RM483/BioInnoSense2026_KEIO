@@ -48,10 +48,17 @@ class LoginPage extends HookConsumerWidget {
                         style: AppText.largeTitle
                             .copyWith(color: p.textPrimary)),
                     const SizedBox(height: 8),
+                    // ブランドタグライン (docs/17 §1)
+                    Text(l10n.brandTagline,
+                        textAlign: TextAlign.center,
+                        style: AppText.caption.copyWith(
+                            color: p.textSecondary,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 6),
                     Text(l10n.welcomeSubtitle,
                         textAlign: TextAlign.center,
                         style: AppText.caption
-                            .copyWith(color: p.textSecondary, height: 1.6)),
+                            .copyWith(color: p.textTertiary, height: 1.6)),
                     const SizedBox(height: 44),
 
                     TextFormField(
@@ -88,11 +95,11 @@ class LoginPage extends HookConsumerWidget {
                               }
                             },
                       child: authState.isLoading
-                          ? const SizedBox(
+                          ? SizedBox(
                               width: 22,
                               height: 22,
                               child: CircularProgressIndicator(
-                                  strokeWidth: 2.2, color: Colors.white))
+                                  strokeWidth: 2.2, color: p.onAccent))
                           : Text(l10n.signIn),
                     ),
                     const SizedBox(height: 10),

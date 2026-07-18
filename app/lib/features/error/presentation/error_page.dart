@@ -1,4 +1,6 @@
-/// エラー画面。技術用語を出さず、次の行動を1つ示す。
+/// 「エラー画面」は存在しない (docs/17 §10)。
+/// 題は状況報告ではなく次の一歩。構成は常に:
+/// やわらかい図 → 何が起きたか(1文・非難なし) → 主ボタン(次の一歩) → ホームへ。
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
@@ -29,15 +31,39 @@ class ErrorPage extends StatelessWidget {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final p = context.palette;
-    final (icon, message) = switch (kind) {
-      ErrorKind.sensorTimeout =>
-        (Icons.sensors_off_outlined, l10n.errorSensorTimeout),
-      ErrorKind.bleDisconnected =>
-        (Icons.bluetooth_disabled_outlined, l10n.errorBleDisconnected),
-      ErrorKind.network => (Icons.wifi_off_outlined, l10n.errorNetwork),
-      ErrorKind.lowBattery =>
-        (Icons.battery_alert_outlined, l10n.errorLowBattery),
-      ErrorKind.unknown => (Icons.error_outline, l10n.errorTitle),
+
+    // kindごとに 題(次の一歩) / 一文 / 主ボタン を変える
+    final (icon, title, message, action) = switch (kind) {
+      ErrorKind.sensorTimeout => (
+          Icons.sensors_outlined,
+          l10n.errorTitleSensor,
+          l10n.errorSensorTimeout,
+          l10n.retry,
+        ),
+      ErrorKind.bleDisconnected => (
+          Icons.bluetooth_outlined,
+          l10n.errorTitleBle,
+          l10n.errorBleDisconnected,
+          l10n.reconnectAction,
+        ),
+      ErrorKind.network => (
+          Icons.wifi_outlined,
+          l10n.errorTitleNetwork,
+          l10n.errorNetwork,
+          l10n.retry,
+        ),
+      ErrorKind.lowBattery => (
+          Icons.battery_5_bar_outlined,
+          l10n.errorTitleBattery,
+          l10n.errorLowBattery,
+          l10n.okUnderstood,
+        ),
+      ErrorKind.unknown => (
+          Icons.refresh_outlined,
+          l10n.errorTitle,
+          l10n.errorNetwork,
+          l10n.retry,
+        ),
     };
 
     return Scaffold(
@@ -56,10 +82,10 @@ class ErrorPage extends StatelessWidget {
                   color: p.cardElevated,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, size: 34, color: p.textSecondary),
+                child: Icon(icon, size: 32, color: p.textSecondary),
               ),
               const SizedBox(height: 28),
-              Text(l10n.errorTitle,
+              Text(title,
                   textAlign: TextAlign.center,
                   style: AppText.title.copyWith(color: p.textPrimary)),
               const SizedBox(height: 10),
@@ -72,7 +98,7 @@ class ErrorPage extends StatelessWidget {
                 onPressed: () => context.canPop()
                     ? context.pop()
                     : context.go(Routes.home),
-                child: Text(l10n.retry),
+                child: Text(action),
               ),
               const SizedBox(height: 10),
               TextButton(
