@@ -1,8 +1,11 @@
-/// アプリの画面構成。
+/// アプリの画面構成 (IA v2 — docs/21)。
 ///
-/// 5タブ(ホーム/測定/履歴/愛犬/設定)のShell + 測定セッションと結果は
-/// タブバーを隠すフルスクリーン遷移(フェード+わずかなスケール)で、
-/// 「開始→測定中→完了→結果」がひとつながりの体験になるようにする。
+/// Bottom Navigationは3タブのみ: Home / Dogs / Settings。
+/// - Home = 健康状態と測定の入口(見守りリング)。履歴・日誌はHomeの下の階層。
+/// - 測定セッションと結果はタブバーを隠すフルスクリーン遷移(フェード+微スケール)で、
+///   「ホーム→測定中→解析→結果」がひとつながりの体験になるようにする。
+/// - Dogs = 多頭飼いのカード切り替え(スワイプ)+プロフィール編集。
+/// - Settings = デバイス・言語・アカウントなど技術情報の置き場。
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -11,13 +14,14 @@ import 'package:hooks_riverpod/hooks_riverpod.dart';
 import '../../features/auth/application/auth_controller.dart';
 import '../../features/auth/presentation/login_page.dart';
 import '../../features/ble/presentation/connect_page.dart';
+import '../../features/dogs/domain/dog.dart';
 import '../../features/dogs/presentation/dog_profile_page.dart';
+import '../../features/dogs/presentation/dogs_page.dart';
 import '../../features/error/presentation/error_page.dart';
 import '../../features/history/presentation/history_detail_page.dart';
 import '../../features/history/presentation/history_page.dart';
 import '../../features/home/presentation/home_page.dart';
 import '../../features/measurement/domain/measurement.dart';
-import '../../features/measurement/presentation/measure_start_page.dart';
 import '../../features/measurement/presentation/measuring_page.dart';
 import '../../features/measurement/presentation/result_page.dart';
 import '../../features/settings/presentation/settings_page.dart';
@@ -27,14 +31,22 @@ import '../navigation/app_shell.dart';
 abstract final class Routes {
   static const splash = '/splash';
   static const login = '/login';
+
+  // ---- タブ(3つだけ) ----
   static const home = '/home';
-  static const measure = '/measure';
+  static const dogs = '/dogs';
+  static const settings = '/settings';
+
+  // ---- Homeの下の階層(タブバーは維持) ----
+  static const history = '/home/history';
+  static const historyDetail = '/home/history/detail';
+
+  // ---- Dogsの下の階層 ----
+  static const dogEdit = '/dogs/edit';
+
+  // ---- フルスクリーン(タブバーなし) ----
   static const measureSession = '/measure/session';
   static const measureResult = '/measure/result';
-  static const history = '/history';
-  static const historyDetail = '/history/detail';
-  static const dog = '/dog';
-  static const settings = '/settings';
   static const connect = '/connect';
   static const error = '/error';
 }
@@ -64,37 +76,45 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: Routes.splash, builder: (_, __) => const SplashPage()),
       GoRoute(path: Routes.login, builder: (_, __) => const LoginPage()),
 
-      // ---- 5タブShell ----
+      // ---- 3タブShell ----
       StatefulShellRoute.indexedStack(
         builder: (context, state, shell) => AppShell(shell: shell),
         branches: [
-          StatefulShellBranch(routes: [
-            GoRoute(path: Routes.home, builder: (_, __) => const HomePage()),
-          ]),
+          // Home: 状態 → 測定 → 履歴・日誌 がこの枝に住む
           StatefulShellBranch(routes: [
             GoRoute(
-                path: Routes.measure,
-                builder: (_, __) => const MeasureStartPage()),
-          ]),
-          StatefulShellBranch(routes: [
-            GoRoute(
-              path: Routes.history,
-              builder: (_, __) => const HistoryPage(),
+              path: Routes.home,
+              builder: (_, __) => const HomePage(),
               routes: [
                 GoRoute(
-                  path: 'detail',
-                  pageBuilder: (_, state) => _fadeScale(
-                      state,
-                      HistoryDetailPage(
-                          measurement: state.extra as Measurement)),
+                  path: 'history',
+                  builder: (_, __) => const HistoryPage(),
+                  routes: [
+                    GoRoute(
+                      path: 'detail',
+                      pageBuilder: (_, state) => _fadeScale(
+                          state,
+                          HistoryDetailPage(
+                              measurement: state.extra as Measurement)),
+                    ),
+                  ],
                 ),
               ],
             ),
           ]),
+          // Dogs: カードスワイプで切替、編集はこの下
           StatefulShellBranch(routes: [
             GoRoute(
-                path: Routes.dog,
-                builder: (_, __) => const DogProfilePage()),
+              path: Routes.dogs,
+              builder: (_, __) => const DogsPage(),
+              routes: [
+                GoRoute(
+                  path: 'edit',
+                  builder: (_, state) =>
+                      DogProfilePage(initial: state.extra as Dog?),
+                ),
+              ],
+            ),
           ]),
           StatefulShellBranch(routes: [
             GoRoute(

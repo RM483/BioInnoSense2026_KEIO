@@ -1,7 +1,10 @@
-/// ホーム — 「見守りリング」(docs/16 案B)。
+/// ホーム — 「見守りリング」(docs/16 案B / docs/21 v2.1)。
 ///
-/// 犬のアバターを状態色のリングが囲み、その下に
-/// 状態の一文 → 前回からの変化 → 取るべき行動 → 最終測定 の順で言葉が続く。
+/// ホーム=測定の入口 + 見守り中の犬の左右スワイプ切替 (§2)。
+/// リングのPageViewをスワイプすると selectedDogIdProvider が更新され、
+/// 状態の言葉・7日のようす・履歴・記録・測定対象がその犬に切り替わる。
+/// 主CTAは「◯◯の測定をはじめる」1つ(1段目)、副導線は2段目 (§1,3)。
+/// 見守り中が0頭なら空状態 (§8)。初回は頭数の質問を1つだけ出す (§9)。
 /// 数値はここには住まない(ppmの住所は履歴詳細)。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -14,154 +17,134 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../core/widgets/status_ring.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../ble/application/ble_controller.dart';
 import '../../dogs/application/dog_controller.dart';
+import '../../dogs/domain/dog.dart';
 import '../../insights/application/insights_providers.dart';
 import '../../insights/domain/health_assessment.dart';
 import '../../insights/presentation/assessment_style.dart';
 import '../../measurement/domain/measurement.dart';
+import '../../measurement/presentation/start_measure.dart';
+import '../../records/presentation/care_note_sheet.dart';
+import '../../settings/data/user_settings_repository.dart';
 
-class HomePage extends ConsumerWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<HomePage> createState() => _HomePageState();
+}
+
+class _HomePageState extends ConsumerState<HomePage> {
+  PageController? _pager;
+  bool _askedHeadCount = false; // 初回質問は1度だけ (§9)
+
+  @override
+  void dispose() {
+    _pager?.dispose();
+    super.dispose();
+  }
+
+  void _maybeAskHeadCount(
+      AsyncValue<int?> maxDogs, AppLocalizations l10n) {
+    if (_askedHeadCount) return;
+    // ストリームが「値なし(null)」を返した時だけ質問する(読込中は出さない)
+    if (maxDogs is! AsyncData<int?> || maxDogs.value != null) return;
+    _askedHeadCount = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _showHeadCountSheet(context, ref, l10n);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final p = context.palette;
+    final watching = ref.watch(watchingDogsProvider);
     final dog = ref.watch(selectedDogProvider);
-    final assessment = ref.watch(healthAssessmentProvider).valueOrNull ??
-        HealthAssessment.fromHistory(const []);
-    final recent =
-        ref.watch(recentMeasurementsProvider).valueOrNull ?? const [];
     final locale = Localizations.localeOf(context).toLanguageTag();
-    final level = assessment.level;
-    final trend = assessmentTrendLabel(assessment, l10n);
 
-    return Scaffold(
-      body: SafeArea(
-        child: ListView(
-          padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
-          children: [
-            // ---- 挨拶 + 日付 (話しかける入口) ----
-            Text(
-              '${_greeting(l10n)} · '
-              '${DateFormat.MMMEd(locale).format(DateTime.now())}',
-              textAlign: TextAlign.center,
-              style: AppText.caption.copyWith(color: p.textTertiary),
-            ),
-            const SizedBox(height: 28),
+    _maybeAskHeadCount(ref.watch(maxDogsProvider), l10n);
 
-            // ---- 見守りリング (主役 / VoiceOver対応: docs/17 A7,A20) ----
-            Center(
-              child: Semantics(
-                button: true,
-                label: dog == null
-                    ? l10n.registerDog
-                    : '${dog.name} — ${level.phrase(l10n)}',
-                hint: l10n.startMeasurement,
-                child: GestureDetector(
-                  onTap: () {
-                    HapticFeedback.selectionClick();
-                    context.go(Routes.measure);
-                  },
-                  child: ExcludeSemantics(
-                    child: StatusRing(
-                      size: 176,
-                      color: dog == null ? p.accent : level.color(p),
-                      photoUrl: dog?.photoUrl ?? '',
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 24),
-
-            // ---- 言葉: 状態 → 変化 → 行動 → 最終測定 ----
-            if (dog == null) ...[
+    // ---- 空状態: 見守り中の犬がいない (§8) ----
+    if (dog == null) {
+      return Scaffold(
+        body: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+            children: [
               Text(
-                l10n.registerDog,
+                '${_greeting(l10n)} · '
+                '${DateFormat.MMMEd(locale).format(DateTime.now())}',
                 textAlign: TextAlign.center,
-                style: AppText.title.copyWith(
-                    fontSize: 22, color: p.textPrimary),
+                style: AppText.caption.copyWith(color: p.textTertiary),
+              ),
+              const SizedBox(height: 28),
+              Center(
+                child: StatusRing(size: 176, color: p.accent, photoUrl: ''),
+              ),
+              const SizedBox(height: 24),
+              Text(
+                l10n.noWatchingDogs,
+                textAlign: TextAlign.center,
+                style:
+                    AppText.title.copyWith(fontSize: 22, color: p.textPrimary),
               ),
               const SizedBox(height: 10),
               Text(
-                l10n.addDogPrompt,
+                l10n.noWatchingDogsBody,
                 textAlign: TextAlign.center,
                 style: AppText.body
                     .copyWith(color: p.textSecondary, height: 1.6),
               ),
-            ] else ...[
-              // 犬の名前 — 実在が中心にいることを言葉でも支える (Fi)
-              Text(
-                dog.name,
-                textAlign: TextAlign.center,
-                style: AppText.caption.copyWith(
-                    color: p.textSecondary,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14),
-              ),
-              const SizedBox(height: 6),
-              AnimatedSwitcher(
-                duration: const Duration(milliseconds: 300),
-                child: Text(
-                  level.phrase(l10n),
-                  key: ValueKey(level),
-                  textAlign: TextAlign.center,
-                  style: AppText.title.copyWith(
-                      fontSize: 22, color: p.textPrimary),
-                ),
-              ),
-              if (trend != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  trend,
-                  textAlign: TextAlign.center,
-                  style: AppText.caption.copyWith(
-                      color: p.textSecondary,
-                      fontWeight: FontWeight.w600),
-                ),
-              ],
-              const SizedBox(height: 10),
-              Text(
-                assessmentAction(assessment, l10n),
-                textAlign: TextAlign.center,
-                style: AppText.body.copyWith(
-                    color: p.textPrimary,
-                    fontWeight: FontWeight.w500,
-                    height: 1.6),
-              ),
-              if (assessment.latest != null) ...[
-                const SizedBox(height: 12),
-                Text(
-                  '${l10n.lastMeasured} · '
-                  '${relativeTime(l10n, assessment.latest!.startedAt)}',
-                  textAlign: TextAlign.center,
-                  style:
-                      AppText.caption.copyWith(color: p.textTertiary),
-                ),
-              ],
-            ],
-            const SizedBox(height: 32),
-
-            // ---- ここ7日のようす (平置き・カードにしない) ----
-            if (recent.length >= 2) ...[
-              Divider(color: p.hairline, height: 1),
-              const SizedBox(height: 20),
-              _TrendSection(recent: recent, l10n: l10n),
-              const SizedBox(height: 24),
-            ],
-
-            // ---- 測定CTA ----
-            if (dog != null)
-              _PressableCta(
-                label: l10n.startMeasurement,
-                onPressed: () => context.go(Routes.measure),
-              )
-            else
+              const SizedBox(height: 32),
               _PressableCta(
                 label: l10n.registerDog,
-                onPressed: () => context.go(Routes.dog),
+                onPressed: () => context.go(Routes.dogs),
               ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final found = watching.indexWhere((d) => d.id == dog.id);
+    final index = found < 0 ? 0 : found;
+    _pager ??= PageController(initialPage: index);
+
+    return Scaffold(
+      body: SafeArea(
+        child: Column(
+          children: [
+            // ---- 固定ヘッダー: 挨拶 + 日付 (犬に依存しない §2) ----
+            Padding(
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 8),
+              child: Text(
+                '${_greeting(l10n)} · '
+                '${DateFormat.MMMEd(locale).format(DateTime.now())}',
+                textAlign: TextAlign.center,
+                style: AppText.caption.copyWith(color: p.textTertiary),
+              ),
+            ),
+
+            // ---- 犬ごとの全面ページ: 指に追従してページ単位で切替 (§2) ----
+            Expanded(
+              child: PageView.builder(
+                controller: _pager,
+                itemCount: watching.length,
+                onPageChanged: (i) {
+                  HapticFeedback.selectionClick();
+                  ref.read(selectedDogIdProvider.notifier).state =
+                      watching[i].id;
+                },
+                itemBuilder: (context, i) => _DogHomePage(
+                  dog: watching[i],
+                  pageIndex: i,
+                  pageCount: watching.length,
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -173,6 +156,320 @@ class HomePage extends ConsumerWidget {
     if (h < 11) return l10n.goodMorning;
     if (h < 18) return l10n.goodAfternoon;
     return l10n.goodEvening;
+  }
+}
+
+/// 犬1頭ぶんのホームページ (v2.2 §2)。
+/// リング・名前・ページ位置・状態・7日のようす・CTA・副導線までが
+/// ひとまとまりにスライドする。データはすべてこのページの犬のもの (§12)。
+class _DogHomePage extends ConsumerWidget {
+  const _DogHomePage({
+    required this.dog,
+    required this.pageIndex,
+    required this.pageCount,
+  });
+
+  final Dog dog;
+  final int pageIndex;
+  final int pageCount;
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final p = context.palette;
+    final assessment =
+        ref.watch(healthAssessmentOfProvider(dog.id)).valueOrNull ??
+            HealthAssessment.fromHistory(const []);
+    final recent =
+        ref.watch(recentMeasurementsOfProvider(dog.id)).valueOrNull ??
+            const <Measurement>[];
+    final connected =
+        ref.watch(bleControllerProvider).status == BleStatus.connected;
+    final level = assessment.level;
+    final trend = assessmentTrendLabel(assessment, l10n);
+
+    return ListView(
+      padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+      children: [
+        // ---- 見守りリング (主役。写真があれば表示 §6) ----
+        Center(
+          child: Semantics(
+            button: true,
+            label: '${dog.name} — ${level.phrase(l10n)}',
+            hint: l10n.measureStartFor(dog.name),
+            child: GestureDetector(
+              onTap: () => startMeasureFlowFor(context, ref, dog),
+              child: ExcludeSemantics(
+                child: StatusRing(
+                  size: 176,
+                  color: level.color(p),
+                  photoUrl: dog.photoUrl,
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
+
+        // ---- どの犬か一目で分かる: 名前 + ドット + 1/N (§2) ----
+        Text(
+          dog.name,
+          textAlign: TextAlign.center,
+          style: AppText.caption.copyWith(
+              color: p.textSecondary,
+              fontWeight: FontWeight.w600,
+              fontSize: 14),
+        ),
+        if (pageCount > 1) ...[
+          const SizedBox(height: 8),
+          _DogPager(count: pageCount, index: pageIndex),
+        ],
+        const SizedBox(height: 6),
+
+        // ---- 言葉: 状態 → 変化 → 行動 → 最終測定 ----
+        Text(
+          level.phrase(l10n),
+          textAlign: TextAlign.center,
+          style: AppText.title.copyWith(fontSize: 22, color: p.textPrimary),
+        ),
+        if (trend != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            trend,
+            textAlign: TextAlign.center,
+            style: AppText.caption.copyWith(
+                color: p.textSecondary, fontWeight: FontWeight.w600),
+          ),
+        ],
+        const SizedBox(height: 10),
+        Text(
+          assessmentAction(assessment, l10n),
+          textAlign: TextAlign.center,
+          style: AppText.body.copyWith(
+              color: p.textPrimary,
+              fontWeight: FontWeight.w500,
+              height: 1.6),
+        ),
+        if (assessment.latest != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            '${l10n.lastMeasured} · '
+            '${relativeTime(l10n, assessment.latest!.startedAt)}',
+            textAlign: TextAlign.center,
+            style: AppText.caption.copyWith(color: p.textTertiary),
+          ),
+        ],
+        const SizedBox(height: 28),
+
+        // ---- ここ7日のようす (この犬のデータのみ §12) ----
+        if (recent.length >= 2) ...[
+          Divider(color: p.hairline, height: 1),
+          const SizedBox(height: 20),
+          _TrendSection(recent: recent, l10n: l10n),
+          const SizedBox(height: 24),
+        ],
+
+        // ---- 1段目: 大きな主CTA(名前入り §1,3) ----
+        _PressableCta(
+          label: l10n.measureStartFor(dog.name),
+          onPressed: () => startMeasureFlowFor(context, ref, dog),
+        ),
+        if (!connected) ...[
+          const SizedBox(height: 10),
+          Text(
+            l10n.connectFirstHint,
+            textAlign: TextAlign.center,
+            style: AppText.caption.copyWith(color: p.textTertiary),
+          ),
+        ],
+        const SizedBox(height: 18),
+
+        // ---- 2段目: 静かな副導線 (§1) ----
+        Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            _QuietLink(
+              icon: Icons.menu_book_outlined,
+              label: l10n.viewHistory,
+              onTap: () => context.go(Routes.history),
+            ),
+            Container(
+              width: 1,
+              height: 16,
+              margin: const EdgeInsets.symmetric(horizontal: 18),
+              color: p.hairline,
+            ),
+            _QuietLink(
+              icon: Icons.edit_note,
+              label: l10n.addRecord,
+              onTap: () => showCareNoteSheet(context, ref, dog.id),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+/// 初回設定: 一緒に暮らしている犬の頭数 (§9)。回答は上限として保存。
+void _showHeadCountSheet(
+    BuildContext context, WidgetRef ref, AppLocalizations l10n) {
+  final p = context.palette;
+  var selected = 1;
+  showModalBottomSheet<void>(
+    context: context,
+    isDismissible: false,
+    enableDrag: false,
+    backgroundColor: Colors.transparent,
+    builder: (sheetContext) => StatefulBuilder(
+      builder: (context, setState) => Container(
+        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
+        decoration: BoxDecoration(
+          color: p.card,
+          borderRadius: BorderRadius.circular(24),
+        ),
+        child: SafeArea(
+          top: false,
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(l10n.headCountTitle,
+                  textAlign: TextAlign.center,
+                  style: AppText.title.copyWith(color: p.textPrimary)),
+              const SizedBox(height: 8),
+              Text(l10n.headCountBody,
+                  textAlign: TextAlign.center,
+                  style: AppText.caption
+                      .copyWith(color: p.textSecondary, height: 1.6)),
+              const SizedBox(height: 18),
+              Row(
+                children: [
+                  for (final n in [1, 2, 3]) ...[
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () => setState(() => selected = n),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 150),
+                          padding:
+                              const EdgeInsets.symmetric(vertical: 12),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: selected == n
+                                ? p.accentSoft
+                                : p.cardElevated,
+                            borderRadius: BorderRadius.circular(100),
+                            border: Border.all(
+                                color: selected == n
+                                    ? p.accent
+                                    : Colors.transparent,
+                                width: 1.2),
+                          ),
+                          child: Text(
+                            l10n.headCountN(n),
+                            style: AppText.caption.copyWith(
+                              color: selected == n
+                                  ? p.accent
+                                  : p.textSecondary,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    if (n != 3) const SizedBox(width: 8),
+                  ],
+                ],
+              ),
+              const SizedBox(height: 18),
+              FilledButton(
+                onPressed: () {
+                  ref
+                      .read(userSettingsRepositoryProvider)
+                      .setMaxDogs(selected);
+                  Navigator.of(sheetContext).pop();
+                },
+                child: Text(l10n.begin),
+              ),
+            ],
+          ),
+        ),
+      ),
+    ),
+  );
+}
+
+/// 犬ページャ: ドット + 1/N (§2)。切替はページ全体のスワイプで行う。
+class _DogPager extends StatelessWidget {
+  const _DogPager({required this.count, required this.index});
+
+  final int count;
+  final int index;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        for (var i = 0; i < count; i++)
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 200),
+            width: i == index ? 16 : 6,
+            height: 6,
+            margin: const EdgeInsets.symmetric(horizontal: 3),
+            decoration: BoxDecoration(
+              color: i == index ? p.accent : p.hairline,
+              borderRadius: BorderRadius.circular(3),
+            ),
+          ),
+        const SizedBox(width: 10),
+        Text(
+          '${index + 1} / $count',
+          style: AppText.caption.copyWith(
+              color: p.textTertiary,
+              fontFeatures: const [FontFeature.tabularFigures()]),
+        ),
+      ],
+    );
+  }
+}
+
+/// ホーム下部の静かなテキスト導線(履歴・記録)。
+class _QuietLink extends StatelessWidget {
+  const _QuietLink({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return GestureDetector(
+      onTap: () {
+        HapticFeedback.selectionClick();
+        onTap();
+      },
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 10),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 18, color: p.textSecondary),
+            const SizedBox(width: 6),
+            Text(label,
+                style: AppText.bodyMedium.copyWith(color: p.textSecondary)),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -300,6 +597,7 @@ class _PressableCtaState extends State<_PressableCta> {
           ),
           child: Text(
             widget.label,
+            textAlign: TextAlign.center,
             style: AppText.bodyMedium.copyWith(
               // darkは明るいティール面のため黒文字(コントラスト確保) — docs/17 A21
               color: p.onAccent,

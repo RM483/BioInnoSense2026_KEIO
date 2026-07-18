@@ -1,4 +1,4 @@
-/// 測定フロー(開始→測定中→結果)のWidgetテスト。
+/// 測定フロー(ホーム→測定中→結果)のWidgetテスト (IA v2: ホーム=測定の入口)。
 /// MockBleRepositoryを実物として使い、FakeAsync下でタイマーを進めて検証する。
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
@@ -16,24 +16,23 @@ import 'package:hydropaw/features/dogs/domain/dog.dart';
 import 'package:hydropaw/features/error/presentation/error_page.dart';
 import 'package:hydropaw/features/home/presentation/home_page.dart';
 import 'package:hydropaw/features/measurement/data/measurement_repository.dart';
-import 'package:hydropaw/features/measurement/presentation/measure_start_page.dart';
 import 'package:hydropaw/features/measurement/presentation/measuring_page.dart';
 import 'package:hydropaw/features/measurement/presentation/result_page.dart';
+import 'package:hydropaw/features/records/data/care_note_repository.dart';
+import 'package:hydropaw/features/settings/data/user_settings_repository.dart';
 import 'package:hydropaw/l10n/app_localizations.dart';
 
 Widget harness({
   required MockBleRepository ble,
   required InMemoryDogRepository dogs,
   required InMemoryMeasurementRepository measurements,
-  String initialLocation = '/measure',
+  String initialLocation = '/home',
   ThemeMode themeMode = ThemeMode.light,
 }) {
   final router = GoRouter(
     initialLocation: initialLocation,
     routes: [
       GoRoute(path: '/home', builder: (_, __) => const HomePage()),
-      GoRoute(
-          path: '/measure', builder: (_, __) => const MeasureStartPage()),
       GoRoute(
           path: '/measure/session',
           builder: (_, __) => const MeasuringPage()),
@@ -43,9 +42,9 @@ Widget harness({
           path: '/error',
           builder: (_, s) =>
               ErrorPage(kind: s.extra as ErrorKind? ?? ErrorKind.unknown)),
-      GoRoute(path: '/dog', builder: (_, __) => const Scaffold()),
+      GoRoute(path: '/dogs', builder: (_, __) => const Scaffold()),
       GoRoute(path: '/connect', builder: (_, __) => const Scaffold()),
-      GoRoute(path: '/history', builder: (_, __) => const Scaffold()),
+      GoRoute(path: '/home/history', builder: (_, __) => const Scaffold()),
       GoRoute(path: '/settings', builder: (_, __) => const Scaffold()),
     ],
   );
@@ -54,6 +53,11 @@ Widget harness({
       bleRepositoryProvider.overrideWithValue(ble),
       dogRepositoryProvider.overrideWithValue(dogs),
       measurementRepositoryProvider.overrideWithValue(measurements),
+      careNoteRepositoryProvider
+          .overrideWith((ref) => InMemoryCareNoteRepository()),
+      // 初回頭数質問はスキップ(上限2頭で固定)
+      userSettingsRepositoryProvider.overrideWith(
+          (ref) => InMemoryUserSettingsRepository(initialMaxDogs: 2)),
       appAnalyticsProvider.overrideWithValue(const NoopAnalytics()),
     ],
     child: MaterialApp.router(
@@ -92,7 +96,7 @@ void main() {
 
   Future<void> connectBle(WidgetTester tester) async {
     final container = ProviderScope.containerOf(
-        tester.element(find.byType(MeasureStartPage)));
+        tester.element(find.byType(HomePage)));
     final f =
         container.read(bleControllerProvider.notifier).connect('mock-1');
     await settle(tester, const Duration(milliseconds: 800));
@@ -116,8 +120,11 @@ void main() {
     await tester.pump();
     await connectBle(tester);
 
-    expect(find.text('準備ができました'), findsNothing); // 文言はヒント側
-    await tester.tap(find.text('はじめる'));
+    // ホームのCTA(名前入り) → 対象犬の確認 → セッションへ (v2.1 §3)
+    await tester.tap(find.text('ポチの測定をはじめる').last);
+    await tester.pumpAndSettle();
+    expect(find.text('ポチを測定します'), findsOneWidget);
+    await tester.tap(find.text('測定を開始'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
 
@@ -147,7 +154,9 @@ void main() {
     await tester.pump();
     await connectBle(tester);
 
-    await tester.tap(find.text('はじめる'));
+    await tester.tap(find.text('ポチの測定をはじめる').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('測定を開始'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, const Duration(milliseconds: 100));
@@ -176,9 +185,11 @@ void main() {
     await tester.pump();
     await connectBle(tester);
 
-    expect(find.text('はじめる'), findsNothing);
+    expect(find.textContaining('測定をはじめる'), findsNothing);
+    // 空状態: 見守り中の犬がいない (§8)
+    expect(find.text('現在見守っている犬はいません'), findsOneWidget);
     expect(find.text('愛犬を登録する'), findsWidgets); // 導線
-    await teardownBle(tester, MeasureStartPage);
+    await teardownBle(tester, HomePage);
   });
 
   testWidgets('測定中のBLE切断で再接続表示、再接続後も測定画面が継続する', (tester) async {
@@ -188,7 +199,9 @@ void main() {
     await tester.pump();
     await connectBle(tester);
 
-    await tester.tap(find.text('はじめる'));
+    await tester.tap(find.text('ポチの測定をはじめる').last);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('測定を開始'));
     await tester.pump();
     await tester.pump(const Duration(milliseconds: 400));
     await settle(tester, const Duration(milliseconds: 1200));
@@ -212,7 +225,7 @@ void main() {
     await teardownBle(tester, MeasuringPage);
   });
 
-  testWidgets('ダークモードでホーム・測定タブが崩れない', (tester) async {
+  testWidgets('ダークモード・スマホ画面幅でホームが崩れない', (tester) async {
     tester.view.physicalSize = const Size(1170, 2532);
     tester.view.devicePixelRatio = 3.0;
     addTearDown(tester.view.reset);
@@ -231,16 +244,9 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.text('ポチ'), findsOneWidget);
     expect(find.text('はじめての測定をしてみましょう'), findsOneWidget); // 意味の言葉
-
-    await tester.pumpWidget(harness(
-        ble: MockBleRepository(seed: 2),
-        dogs: dogs,
-        measurements: measurements,
-        initialLocation: '/measure',
-        themeMode: ThemeMode.dark));
-    await tester.pump();
-    await tester.pump(const Duration(milliseconds: 600));
-    expect(tester.takeException(), isNull);
-    expect(find.byType(MeasureStartPage), findsOneWidget);
+    // 1段目=名前入り主CTA / 2段目=副導線 (v2.1 §1,3)
+    expect(find.text('ポチの測定をはじめる'), findsWidgets);
+    expect(find.text('履歴を見る'), findsOneWidget);
+    expect(find.text('きょうの記録'), findsOneWidget);
   });
 }

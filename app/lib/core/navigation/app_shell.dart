@@ -1,4 +1,4 @@
-/// 5タブのアプリシェル。
+/// 3タブのアプリシェル (Home / Dogs / Settings — docs/21 IA v2)。
 /// Materialのボトムナビは使わず、ヘアライン1本と余白で構成した
 /// 静かなタブバー(SF Symbols相当のCupertinoIcons)。
 import 'package:flutter/cupertino.dart';
@@ -20,13 +20,7 @@ class AppShell extends StatelessWidget {
 
     final tabs = [
       (CupertinoIcons.house, CupertinoIcons.house_fill, l10n.tabHome),
-      (CupertinoIcons.waveform, CupertinoIcons.waveform, l10n.tabMeasure),
-      (
-        CupertinoIcons.chart_bar,
-        CupertinoIcons.chart_bar_fill,
-        l10n.tabHistory
-      ),
-      (CupertinoIcons.heart, CupertinoIcons.heart_fill, l10n.tabDog),
+      (CupertinoIcons.heart, CupertinoIcons.heart_fill, l10n.tabDogs),
       (CupertinoIcons.gear, CupertinoIcons.gear_solid, l10n.tabSettings),
     ];
 

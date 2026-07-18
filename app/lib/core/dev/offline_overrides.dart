@@ -14,6 +14,9 @@ import '../../features/dogs/data/dog_repository.dart';
 import '../../features/dogs/domain/dog.dart';
 import '../../features/measurement/data/measurement_repository.dart';
 import '../../features/measurement/domain/measurement.dart';
+import '../../features/records/data/care_note_repository.dart';
+import '../../features/records/domain/care_note.dart';
+import '../../features/settings/data/user_settings_repository.dart';
 import '../analytics/app_analytics.dart';
 
 /// Firebase不在時のオーバーライド一式。
@@ -24,8 +27,32 @@ List<Override> offlineOverrides() {
     dogRepositoryProvider.overrideWith((ref) => InMemoryDogRepository()),
     measurementRepositoryProvider
         .overrideWith((ref) => InMemoryMeasurementRepository()),
+    careNoteRepositoryProvider
+        .overrideWith((ref) => InMemoryCareNoteRepository()),
+    userSettingsRepositoryProvider
+        .overrideWith((ref) => InMemoryUserSettingsRepository()),
     appAnalyticsProvider.overrideWithValue(const NoopAnalytics()),
   ];
+}
+
+class InMemoryUserSettingsRepository implements UserSettingsRepository {
+  InMemoryUserSettingsRepository({int? initialMaxDogs})
+      : _maxDogs = initialMaxDogs;
+
+  final _controller = StreamController<int?>.broadcast();
+  int? _maxDogs;
+
+  @override
+  Stream<int?> watchMaxDogs() async* {
+    yield _maxDogs;
+    yield* _controller.stream;
+  }
+
+  @override
+  Future<void> setMaxDogs(int value) async {
+    _maxDogs = value;
+    _controller.add(value);
+  }
 }
 
 class InMemoryAuthRepository implements AuthRepository {
@@ -104,6 +131,36 @@ class InMemoryDogRepository implements DogRepository {
   @override
   Future<String> uploadPhoto(String dogId, Uint8List bytes) async =>
       ''; // オフラインでは写真URLなし(プレビューはUI側のメモリ表示)
+}
+
+class InMemoryCareNoteRepository implements CareNoteRepository {
+  final _controller = StreamController<List<CareNote>>.broadcast();
+  final _notes = <CareNote>[];
+  int _nextId = 1;
+
+  void _notify() => _controller.add(List.unmodifiable(_notes));
+
+  @override
+  Stream<List<CareNote>> watchNotes(String dogId, {int limit = 200}) async* {
+    List<CareNote> filter(List<CareNote> all) =>
+        all.where((n) => n.dogId == dogId).take(limit).toList();
+    yield filter(_notes);
+    yield* _controller.stream.map(filter);
+  }
+
+  @override
+  Future<String> add(CareNote note) async {
+    final saved = note.copyWith(id: 'n-${_nextId++}');
+    _notes.insert(0, saved);
+    _notify();
+    return saved.id;
+  }
+
+  @override
+  Future<void> delete(String dogId, String noteId) async {
+    _notes.removeWhere((n) => n.id == noteId);
+    _notify();
+  }
 }
 
 class InMemoryMeasurementRepository implements MeasurementRepository {

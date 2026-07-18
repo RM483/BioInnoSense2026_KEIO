@@ -1558,3 +1558,12 @@ button:disabled { cursor: default; opacity: 0.4; }
 
 /* ---- 確認シートのアバターも写真対応 ---- */
 .sheet-avatar { overflow: hidden; }
+
+/* ---- v2.2 修正: PC幅で home-words ボックス自体を中央へ (§2)。
+   max-width:480px のブロックが .home-page(align-items:stretch)内で
+   左寄せになっていたのを margin auto で中央配置にする ---- */
+.home-page .home-words {
+  width: 100%;
+  margin-left: auto;
+  margin-right: auto;
+}

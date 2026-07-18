@@ -30,3 +30,22 @@ final healthAssessmentProvider = Provider<AsyncValue<HealthAssessment>>(
       .watch(recentMeasurementsProvider)
       .whenData(HealthAssessment.fromHistory),
 );
+
+/// 犬を指定した版 (docs/21 v2.2 §2,12)。
+/// ホームの全面ページスワイプで、各ページが自分の犬のデータだけを描くために
+/// 使う — 別の犬の健康状態・測定情報が混ざらないことをここで担保する。
+final recentMeasurementsOfProvider =
+    FutureProvider.family<List<Measurement>, String>((ref, dogId) async {
+  if (dogId.isEmpty) return const [];
+  ref.watch(latestMeasurementProvider); // 新規保存で自動再評価
+  return ref
+      .read(measurementRepositoryProvider)
+      .fetchHistory(dogId, limit: 14);
+});
+
+final healthAssessmentOfProvider =
+    Provider.family<AsyncValue<HealthAssessment>, String>(
+  (ref, dogId) => ref
+      .watch(recentMeasurementsOfProvider(dogId))
+      .whenData(HealthAssessment.fromHistory),
+);

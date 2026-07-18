@@ -27,24 +27,34 @@ void main() {
     await tester.tap(find.text('登録せずに使ってみる'));
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
-    // ---- ホーム: 登録カード → 愛犬タブで登録 ----
+    // ---- 初回設定: 頭数の質問 (v2.1 §9) ----
+    expect(find.textContaining('何頭ですか'), findsOneWidget);
+    await tester.tap(find.text('はじめる'));
+    await tester.pumpAndSettle();
+
+    // ---- ホーム(空状態) → Dogsで登録 (§5A,8) ----
     await tester.tap(find.text('愛犬を登録する'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('新しい愛犬を追加'));
     await tester.pumpAndSettle();
     await tester.enterText(find.byType(TextField).first, 'ポチ');
     await tester.tap(find.text('保存'));
     await tester.pumpAndSettle(const Duration(seconds: 1));
 
-    // ---- 測定タブ → デバイス接続(Mock) ----
-    await tester.tap(find.text('測定'));
+    // ---- ホームのCTA(名前入り §3)。未接続なら接続画面が開く ----
+    await tester.tap(find.text('ホーム'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('デバイス接続'));
+    await tester.tap(find.text('ポチの測定をはじめる'));
     await tester.pumpAndSettle(const Duration(seconds: 2));
     expect(find.text('HydroPaw-MOCK'), findsWidgets);
     await tester.tap(find.text('接続').first);
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
-    // ---- 測定開始(自動でセッションへ) ----
-    await tester.tap(find.text('はじめる'));
+    // ---- 接続済み: CTA → 対象犬の確認 → 測定セッションへ (§3) ----
+    await tester.tap(find.text('ポチの測定をはじめる'));
+    await tester.pumpAndSettle();
+    expect(find.text('ポチを測定します'), findsOneWidget);
+    await tester.tap(find.text('測定を開始'));
     await tester.pump(const Duration(seconds: 1));
     await tester.pump(const Duration(seconds: 3));
     expect(find.text('終了する'), findsOneWidget);

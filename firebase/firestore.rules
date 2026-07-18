@@ -15,6 +15,7 @@ service cloud.firestore {
         }
         match /meals/{id}      { allow read, write: if isOwner(uid); }
         match /symptoms/{id}   { allow read, write: if isOwner(uid); }
+        match /careNotes/{id}  { allow read, write: if isOwner(uid); }
         // dailyStatsはFunctionsのみ書込み(クライアントはread only)
         match /dailyStats/{id} { allow read: if isOwner(uid); }
         match /alerts/{id}     { allow read: if isOwner(uid); }

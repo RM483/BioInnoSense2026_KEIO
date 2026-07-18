@@ -13,35 +13,117 @@ import '../application/dog_controller.dart';
 import '../domain/dog.dart';
 
 class DogProfilePage extends HookConsumerWidget {
-  const DogProfilePage({super.key});
+  const DogProfilePage({super.key, this.initial});
+
+  /// 編集対象の犬。null時は選択中の犬(いなければ新規登録)。
+  /// Dogsタブの「追加」カードからは空のDogが渡される。
+  final Dog? initial;
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final l10n = AppLocalizations.of(context)!;
     final p = context.palette;
-    final dog =
-        ref.watch(selectedDogProvider) ?? const Dog(id: '', name: '');
+    final dog = initial ??
+        ref.watch(selectedDogProvider) ??
+        const Dog(id: '', name: '');
     final saving = ref.watch(dogControllerProvider).isLoading;
 
     final nameCtrl = useTextEditingController(text: dog.name);
+    // 名前は必須: 保存した時点で正式に犬を作成する (docs/21 v2.1 §5A)
+    final nameFilled = useState(dog.name.trim().isNotEmpty);
     final breedCtrl = useTextEditingController(text: dog.breed);
     final weightCtrl = useTextEditingController(
         text: dog.weightKg > 0 ? dog.weightKg.toString() : '');
     final birthday = useState<DateTime?>(dog.birthday);
     final pickedPhoto = useState<XFile?>(null);
     final previewBytes = useState<Uint8List?>(null);
+    final photoRemoved = useState(false); // 「現在の写真を削除」(v2.2 §6)
 
-    Future<void> pickPhoto() async {
+    Future<void> pickFrom(ImageSource source) async {
       final picked = await ImagePicker().pickImage(
-          source: ImageSource.gallery, maxWidth: 1024, imageQuality: 85);
+          source: source, maxWidth: 1024, imageQuality: 85);
       if (picked != null) {
         pickedPhoto.value = picked;
         previewBytes.value = await picked.readAsBytes();
+        photoRemoved.value = false;
       }
     }
 
+    /// 肉球アイコン/写真タップで開く操作シート (§6):
+    /// 撮る / 選ぶ / (登録済みなら)削除 / キャンセル
+    Future<void> pickPhoto() async {
+      final hasPhoto =
+          previewBytes.value != null || dog.photoUrl.isNotEmpty;
+      await showModalBottomSheet<void>(
+        context: context,
+        backgroundColor: Colors.transparent,
+        builder: (sheetContext) => Container(
+          margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
+          padding: const EdgeInsets.fromLTRB(20, 14, 20, 20),
+          decoration: BoxDecoration(
+            color: p.card,
+            borderRadius: BorderRadius.circular(24),
+          ),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: Container(
+                    width: 36,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: p.hairline,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _PhotoAction(
+                  icon: Icons.photo_camera_outlined,
+                  label: l10n.takePhoto,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    pickFrom(ImageSource.camera);
+                  },
+                ),
+                _PhotoAction(
+                  icon: Icons.photo_library_outlined,
+                  label: l10n.choosePhoto,
+                  onTap: () {
+                    Navigator.of(sheetContext).pop();
+                    pickFrom(ImageSource.gallery);
+                  },
+                ),
+                if (hasPhoto)
+                  _PhotoAction(
+                    icon: Icons.delete_outline,
+                    label: l10n.removePhoto,
+                    color: p.danger,
+                    onTap: () {
+                      // 肉球アイコンへ戻す(保存時に確定)
+                      pickedPhoto.value = null;
+                      previewBytes.value = null;
+                      photoRemoved.value = true;
+                      Navigator.of(sheetContext).pop();
+                    },
+                  ),
+                _PhotoAction(
+                  icon: Icons.close,
+                  label: l10n.cancel,
+                  onTap: () => Navigator.of(sheetContext).pop(),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(title: Text(l10n.tabDog)),
+      appBar: AppBar(title: Text(l10n.dogProfile)),
       body: ListView(
         padding: const EdgeInsets.all(24),
         children: [
@@ -61,14 +143,15 @@ class DogProfilePage extends HookConsumerWidget {
                           ? DecorationImage(
                               image: MemoryImage(previewBytes.value!),
                               fit: BoxFit.cover)
-                          : dog.photoUrl.isNotEmpty
+                          : (dog.photoUrl.isNotEmpty &&
+                                  !photoRemoved.value)
                               ? DecorationImage(
                                   image: NetworkImage(dog.photoUrl),
                                   fit: BoxFit.cover)
                               : null,
                     ),
                     child: (previewBytes.value == null &&
-                            dog.photoUrl.isEmpty)
+                            (dog.photoUrl.isEmpty || photoRemoved.value))
                         ? Icon(Icons.pets, size: 44, color: p.textTertiary)
                         : null,
                   ),
@@ -97,7 +180,8 @@ class DogProfilePage extends HookConsumerWidget {
           _FieldLabel(l10n.dogName),
           TextField(
             controller: nameCtrl,
-            decoration: const InputDecoration(),
+            decoration: InputDecoration(hintText: l10n.nameRequiredHint),
+            onChanged: (v) => nameFilled.value = v.trim().isNotEmpty,
           ),
           const SizedBox(height: 20),
           _FieldLabel(l10n.breed),
@@ -170,7 +254,7 @@ class DogProfilePage extends HookConsumerWidget {
           const SizedBox(height: 36),
 
           FilledButton(
-            onPressed: saving
+            onPressed: (saving || !nameFilled.value)
                 ? null
                 : () async {
                     final bytes = previewBytes.value;
@@ -183,6 +267,7 @@ class DogProfilePage extends HookConsumerWidget {
                             birthday: birthday.value,
                           ),
                           photoBytes: bytes,
+                          removePhoto: photoRemoved.value,
                         );
                     if (!context.mounted) return;
                     // タブ直下では戻り先がないためスナックバーで完了を伝える
@@ -202,6 +287,42 @@ class DogProfilePage extends HookConsumerWidget {
                 : Text(l10n.save),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// 写真操作シートの1行
+class _PhotoAction extends StatelessWidget {
+  const _PhotoAction({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+    this.color,
+  });
+
+  final IconData icon;
+  final String label;
+  final VoidCallback onTap;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        child: Row(
+          children: [
+            Icon(icon, size: 21, color: color ?? p.textSecondary),
+            const SizedBox(width: 14),
+            Text(label,
+                style: AppText.bodyMedium
+                    .copyWith(color: color ?? p.textPrimary)),
+          ],
+        ),
       ),
     );
   }

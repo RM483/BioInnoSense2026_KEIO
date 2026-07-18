@@ -88,7 +88,8 @@ class ResultPage extends ConsumerWidget {
                     ref
                         .read(measurementControllerProvider.notifier)
                         .resetSession();
-                    context.go(Routes.measure);
+                    // 接続済みのままなので、そのまま次のセッションへ
+                    context.pushReplacement(Routes.measureSession);
                   },
                   child: Text(l10n.remeasureAction,
                       style:
