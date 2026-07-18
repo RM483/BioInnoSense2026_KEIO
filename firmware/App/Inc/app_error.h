@@ -18,6 +18,7 @@ typedef enum {
     E_LOW_BATTERY       = 0x07, /**< 電池電圧低下 */
     E_INTERNAL          = 0x08, /**< 内部エラー */
     E_CRC               = 0x09, /**< フレームCRC不一致 */
+    E_NO_BREATH         = 0x0A, /**< READYタイムアウト(呼気を検出できず) */
 } app_err_t;
 
 #endif /* APP_ERROR_H */

@@ -31,6 +31,8 @@ typedef enum {
     HPP_CMD_GET_STATUS  = 0x06,
     HPP_CMD_GET_INFO    = 0x07,
     HPP_CMD_ZERO        = 0x08, /**< DGS2ゼロ校正 'Z' (クリーンエア中に実行) */
+    HPP_CMD_ACK_EVT     = 0x09, /**< App→FW: 信頼配送イベントの受領ACK(payload=SEQ) */
+    HPP_CMD_BREATH      = 0x0A, /**< 呼気測定セッション開始 (BAP, docs/18) */
     HPP_ACK             = 0x40,
     HPP_NAK             = 0x41,
     HPP_EVT_DATA        = 0x81,
@@ -38,7 +40,20 @@ typedef enum {
     HPP_EVT_STATUS      = 0x83,
     HPP_EVT_ERROR       = 0x84,
     HPP_EVT_INFO        = 0x85,
+    HPP_EVT_RESULT      = 0x86, /**< 呼気解析結果30B (ARQで信頼配送) */
+    HPP_EVT_PHASE       = 0x87, /**< 状態遷移通知2B {phase, detail} (イベント駆動) */
 } hpp_type_t;
+
+/* ---- EVT_PHASE の phase 値 (状態機械の見せたい粒度に正規化) ---- */
+typedef enum {
+    HPP_PHASE_WARMUP   = 0,
+    HPP_PHASE_READY    = 1, /**< 呼気待ち */
+    HPP_PHASE_BREATH   = 2, /**< 呼気捕捉中 */
+    HPP_PHASE_ANALYZE  = 3,
+    HPP_PHASE_RETRY    = 4, /**< 低品質→自動再測定でREADYへ */
+    HPP_PHASE_DONE     = 5, /**< 結果送信(EVT_RESULTが続く) */
+    HPP_PHASE_ABORTED  = 6, /**< 中止(EVT_ERRORが理由を運ぶ) */
+} hpp_phase_t;
 
 /* ---- EVT_DATA flags ---- */
 #define HPP_FLAG_OUT_OF_RANGE  (1U << 0)
