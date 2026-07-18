@@ -35,6 +35,14 @@ class MockBleRepository implements BleRepository {
   bool _measuring = false;
   int _seq = 0;
 
+  // ---- 呼気セッション(BAP)模倣 ----
+  Timer? _breathTimer;
+  int _breathTick = 0;
+  int _sessionId = 0;
+  Timer? _arqTimer; // EVT_RESULT再送(ACK_EVT未着時) — FWのARQを模倣
+  int? _pendingResultSeq;
+  Uint8List? _pendingResultPayload;
+
   // ---- 模擬センサ状態 ----
   DateTime? _sessionStart;
   double _baselinePpb = 3200; // 犬の空腹時呼気の想定ベースライン
@@ -96,10 +104,24 @@ class MockBleRepository implements BleRepository {
       case Hpp.cmdStartCont:
         _ack(type);
         _startStream();
+      case Hpp.cmdBreath:
+        _ack(type);
+        _startBreathSession();
+      case Hpp.cmdAckEvt:
+        // 信頼配送ACK: 再送を止める(応答は返さない — FWと同じ)
+        if (payload.isNotEmpty && payload[0] == _pendingResultSeq) {
+          _arqTimer?.cancel();
+          _pendingResultSeq = null;
+          _pendingResultPayload = null;
+        }
       case Hpp.cmdStop:
         _ack(type);
-        if (emitSummary) _emitSummary();
-        _stopStream();
+        if (_breathTimer != null) {
+          _stopBreathSession(); // 呼気セッション中止(部分結果は破棄)
+        } else {
+          if (emitSummary) _emitSummary();
+          _stopStream();
+        }
       case Hpp.cmdSingle:
         _ack(type);
         _emitData(single: true);
@@ -118,6 +140,8 @@ class MockBleRepository implements BleRepository {
 
   void dispose() {
     _dataTimer?.cancel();
+    _breathTimer?.cancel();
+    _arqTimer?.cancel();
     _frameController.close();
     _stateController.close();
   }
@@ -226,5 +250,101 @@ class MockBleRepository implements BleRepository {
     if (_frameController.isClosed) return;
     _frameController.add(
         HppFrame(type, _seq++ & 0xFF, Uint8List.fromList(payload)));
+  }
+
+  // ---- 呼気セッション(BAP): FWの WARMUP→READY→BREATH→ANALYZE→RESULT を
+  //      短縮タイムライン(約20秒)で模倣する。 ----
+
+  void _startBreathSession() {
+    _sessionId++;
+    _breathTick = 0;
+    _sessionStart = DateTime.now();
+    _measuring = true;
+    _emitPhase(Hpp.phaseWarmup);
+    _breathTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _breathStep());
+  }
+
+  void _stopBreathSession() {
+    _breathTimer?.cancel();
+    _breathTimer = null;
+    _measuring = false;
+  }
+
+  void _emitPhase(int phase, [int detail = 0]) =>
+      _emit(Hpp.evtPhase, [phase, detail]);
+
+  void _breathStep() {
+    _breathTick++;
+    final t = _breathTick;
+    // タイムライン: 1-3s WARMUP / 4-6s READY / 7-16s BREATH / 17s ANALYZE / 18s RESULT
+    const baseline = 1800.0;
+    double ppb = baseline + (_rng.nextDouble() - 0.5) * 120;
+    if (t == 4) _emitPhase(Hpp.phaseReady);
+    if (t == 7) _emitPhase(Hpp.phaseBreath);
+    if (t >= 7 && t <= 16) {
+      // 立上り→プラトーの呼気波形
+      final k = (t - 6) / 4.0;
+      ppb = baseline + 5200 * (k > 1 ? 1 : k) + (_rng.nextDouble() - 0.5) * 200;
+    }
+    _emitBreathData(ppb.round(), humid: t >= 7 && t <= 16);
+    if (t == 17) _emitPhase(Hpp.phaseAnalyze);
+    if (t >= 18) {
+      _stopBreathSession();
+      _emitPhase(Hpp.phaseDone, 92);
+      _emitResult();
+    }
+  }
+
+  void _emitBreathData(int ppb, {required bool humid}) {
+    final tMs =
+        DateTime.now().difference(_sessionStart ?? DateTime.now()).inMilliseconds;
+    final p = ByteData(13)
+      ..setUint32(0, tMs, Endian.little)
+      ..setInt32(4, ppb, Endian.little)
+      ..setInt16(8, 250 + _rng.nextInt(6), Endian.little)
+      ..setUint16(10, humid ? 460 + _rng.nextInt(20) : 400 + _rng.nextInt(8),
+          Endian.little)
+      ..setUint8(12, 0);
+    _emit(Hpp.evtData, p.buffer.asUint8List());
+  }
+
+  /// EVT_RESULT(30B)。ACK_EVTが来るまで1秒間隔で再送する(選択的ARQ模倣)。
+  void _emitResult() {
+    final quality = 88 + _rng.nextInt(10); // 高品質呼気
+    const confidence = 100;
+    const flags = Hpp.rfRhOk | Hpp.rfWarmupOk;
+    final p = ByteData(30)
+      ..setUint8(0, _sessionId & 0xFF)
+      ..setUint8(1, quality)
+      ..setUint8(2, confidence)
+      ..setUint8(3, flags)
+      ..setInt32(4, 1800, Endian.little) // baseline
+      ..setInt32(8, 5300, Endian.little) // peak
+      ..setInt32(12, 4900, Endian.little) // plateau
+      ..setUint32(16, 46000, Endian.little) // AUC
+      ..setUint16(20, 42, Endian.little) // rise 4.2s
+      ..setUint16(22, 100, Endian.little) // duration 10.0s
+      ..setInt16(24, 252, Endian.little)
+      ..setInt16(26, 62, Endian.little) // ΔRH +6.2%
+      ..setUint16(28, 40, Endian.little); // pre-MAD
+    final payload = p.buffer.asUint8List();
+    final seq = _seq & 0xFF; // _emitが使うSEQを控えて再送に使う
+    _pendingResultSeq = seq;
+    _pendingResultPayload = Uint8List.fromList(payload);
+    _emit(Hpp.evtResult, payload);
+    var attempts = 1;
+    _arqTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_pendingResultSeq == null || attempts >= 5) {
+        timer.cancel();
+        return;
+      }
+      attempts++;
+      // 同一SEQで再送(受信側の重複排除を通す) — FWと同じ振る舞い
+      if (!_frameController.isClosed && _pendingResultPayload != null) {
+        _frameController.add(
+            HppFrame(Hpp.evtResult, _pendingResultSeq!, _pendingResultPayload!));
+      }
+    });
   }
 }
