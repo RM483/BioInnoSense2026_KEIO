@@ -68,13 +68,20 @@ export class MockProvider implements DataProvider {
     this.stopTimer()
     this.status = 'idle'
     const startedAt = this.sessionStart ?? new Date()
+    // BAP品質スコアの模倣 (docs/18 §S6):
+    // 短すぎる測定はQを下げ、再測定提案フラグを立てる — FWと同じ判定軸
+    const durationS = Math.round((Date.now() - startedAt.getTime()) / 1000)
+    const quality = durationS < 10 ? 45 : 88 + Math.floor(Math.random() * 10)
     return {
       startedAt: startedAt.toISOString(),
-      durationS: Math.round((Date.now() - startedAt.getTime()) / 1000),
+      durationS,
       sampleCount: this.count,
       avgPpb: this.count === 0 ? 0 : Math.round(this.sum / this.count),
       maxPpb: this.max,
       minPpb: this.count === 0 ? 0 : this.min,
+      quality,
+      confidence: 100,
+      qualityFlags: (quality < 60 ? 0x01 : 0) | 0x02 | 0x10,
     }
   }
 

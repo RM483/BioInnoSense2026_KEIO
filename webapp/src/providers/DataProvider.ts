@@ -20,7 +20,7 @@ export interface SensorSample {
   flags: number
 }
 
-/** 測定終了時のサマリ (EVT_SUMMARY相当) */
+/** 測定終了時のサマリ (EVT_SUMMARY / EVT_RESULT相当) */
 export interface SessionSummary {
   startedAt: string
   durationS: number
@@ -28,6 +28,12 @@ export interface SessionSummary {
   avgPpb: number
   maxPpb: number
   minPpb: number
+  /** BAP品質スコア Q 0-100 (呼気モードのみ, docs/18 §S6) */
+  quality?: number
+  /** BAP信頼度スコア C 0-100 (計測器健全性, §S7) */
+  confidence?: number
+  /** EVT_RESULT flags (bit0:REMEASURE bit1:RH_OK …) */
+  qualityFlags?: number
 }
 
 export type Unsubscribe = () => void

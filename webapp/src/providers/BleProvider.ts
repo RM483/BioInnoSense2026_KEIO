@@ -20,6 +20,7 @@ import {
   HppDecoder,
   hppEncode,
   readEvtData,
+  readEvtResult,
   readEvtSummary,
 } from './hpp'
 
@@ -129,9 +130,38 @@ export class BleProvider implements DataProvider {
     )
   }
 
+  /** 信頼配送イベント(EVT_RESULT/SUMMARY/ERROR)の重複排除済みSEQ */
+  private ackedSeqs = new Set<number>()
+
+  /** 信頼配送イベントを受領: ACK_EVTを返し、ARQ再送(重複)ならfalse */
+  private ackReliable(seq: number): boolean {
+    void this.send(HPP.cmdAckEvt, [seq]).catch(() => {})
+    if (this.ackedSeqs.has(seq)) return false
+    this.ackedSeqs.add(seq)
+    return true
+  }
+
   private onChunk(chunk: Uint8Array) {
     for (const f of this.decoder.feed(chunk)) {
       switch (f.type) {
+        case HPP.evtResult: {
+          if (!this.ackReliable(f.seq)) break
+          const r = readEvtResult(f.payload)
+          // 呼気モードの結果もサマリ待ちへ渡す(代表値=プラトー, docs/18)
+          this.summaryWaiter?.({
+            startedAt: (this.sessionStart ?? new Date()).toISOString(),
+            durationS: Math.round(r.durationS),
+            sampleCount: 0,
+            avgPpb: r.plateauPpb,
+            maxPpb: r.peakPpb,
+            minPpb: r.baselinePpb,
+            quality: r.quality,
+            confidence: r.confidence,
+            qualityFlags: r.flags,
+          })
+          this.summaryWaiter = null
+          break
+        }
         case HPP.evtData: {
           const d = readEvtData(f.payload)
           this.sampleListeners.forEach((cb) =>
@@ -148,6 +178,7 @@ export class BleProvider implements DataProvider {
           break
         }
         case HPP.evtSummary: {
+          if (!this.ackReliable(f.seq)) break // FW v1.2はサマリも信頼配送
           const s = readEvtSummary(f.payload)
           this.summaryWaiter?.({
             startedAt: (this.sessionStart ?? new Date()).toISOString(),

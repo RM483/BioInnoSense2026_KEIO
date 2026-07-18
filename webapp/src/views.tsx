@@ -373,6 +373,17 @@ export function MeasureFlow(props: {
           </div>
           <h2 className="flow-title">測定できました</h2>
           <p className="comment center">{levelPhrase[rLevel]}</p>
+          {r.quality !== undefined && <QualityBadge quality={r.quality} />}
+          {(r.qualityFlags ?? 0) & 0x01 ? (
+            <p className="comment center" style={{ fontSize: 13 }}>
+              もういちど測ると、より確かな記録になります
+            </p>
+          ) : null}
+          {r.confidence !== undefined && r.confidence < 70 ? (
+            <p className="comment center" style={{ fontSize: 13, color: 'var(--warn)' }}>
+              センサーの調子がいつもと違うようです。数値は参考としてご覧ください
+            </p>
+          ) : null}
           <div className="card stats-inline">
             <div className="stat">
               <div className="v">{Math.max(1, Math.round(r.durationS / 60))}分</div>
@@ -441,6 +452,32 @@ export function MeasureFlow(props: {
 }
 
 /* ================= 共有部品 ================= */
+
+/** 測定の質を言葉で伝えるバッジ (Q≥80 高い / 60-79 ふつう / <60 低い)。
+ *  数値のQ/Cは出さない — 意味だけを渡す (docs/17 / docs/18 §S6)。 */
+function QualityBadge({ quality }: { quality: number }) {
+  const [label, color] =
+    quality >= 80
+      ? ['高い', 'var(--success)']
+      : quality >= 60
+        ? ['ふつう', 'var(--accent)']
+        : ['低い', 'var(--warn)']
+  return (
+    <span
+      style={{
+        display: 'inline-block',
+        padding: '6px 14px',
+        borderRadius: 999,
+        fontSize: 12.5,
+        fontWeight: 600,
+        color,
+        background: `color-mix(in srgb, ${color} 12%, transparent)`,
+      }}
+    >
+      測定の質 · {label}
+    </span>
+  )
+}
 
 /**
  * 健康状態の変化 — 「良くなった/変わらない/悪くなった」が一目で分かる折れ線。

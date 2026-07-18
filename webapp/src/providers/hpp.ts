@@ -18,6 +18,8 @@ export const HPP = {
   cmdGetStatus: 0x06,
   cmdGetInfo: 0x07,
   cmdZero: 0x08,
+  cmdAckEvt: 0x09, // 信頼配送イベントの受領ACK(payload=SEQ)
+  cmdBreath: 0x0a, // 呼気イベント測定セッション開始 (docs/18)
 
   ack: 0x40,
   nak: 0x41,
@@ -26,6 +28,8 @@ export const HPP = {
   evtStatus: 0x83,
   evtError: 0x84,
   evtInfo: 0x85,
+  evtResult: 0x86, // 呼気解析結果30B (要ACK_EVT — 選択的ARQ)
+  evtPhase: 0x87, // 状態遷移通知 {phase, detail}
 } as const
 
 export interface HppFrame {
@@ -144,6 +148,26 @@ export function readEvtSummary(p: Uint8Array) {
     maxPpb: v.getInt32(6, true),
     minPpb: v.getInt32(10, true),
     durationS: v.getUint16(14, true),
+  }
+}
+
+/** EVT_RESULT (30B) — firmware send_result / Dart resultXxx と1:1 */
+export function readEvtResult(p: Uint8Array) {
+  const v = new DataView(p.buffer, p.byteOffset, p.byteLength)
+  return {
+    sessionId: p[0],
+    quality: p[1], // Q 0-100
+    confidence: p[2], // C 0-100
+    flags: p[3], // bit0:REMEASURE bit1:RH_OK bit2:TRUNCATED bit3:RETRIED
+    baselinePpb: v.getInt32(4, true),
+    peakPpb: v.getInt32(8, true),
+    plateauPpb: v.getInt32(12, true),
+    aucPpbS: v.getUint32(16, true),
+    riseS: v.getUint16(20, true) / 10,
+    durationS: v.getUint16(22, true) / 10,
+    tempC: v.getInt16(24, true) / 10,
+    rhDelta: v.getInt16(26, true) / 10,
+    preMadPpb: v.getUint16(28, true),
   }
 }
 
