@@ -220,9 +220,11 @@ bap_evt_t bap_on_sample(bap_t *b, int32_t ppb, int16_t temp_c10,
             }
             b->onset_run++;
             if (b->onset_run >= CFG_BAP_ONSET_N) {
-                /* 呼気開始。判定に使ったNサンプルも呼気に含める */
+                /* 呼気開始。判定に使ったNサンプルも呼気に含める。
+                 * (起動直後のtick値が小さい場合のアンダーフローを防ぐ) */
+                uint32_t back = (uint32_t)(CFG_BAP_ONSET_N - 1U) * 1000U;
                 b->phase = BAP_PHASE_BREATH;
-                b->onset_ms = now_ms - (uint32_t)(CFG_BAP_ONSET_N - 1U) * 1000U;
+                b->onset_ms = (now_ms > back) ? (now_ms - back) : 0U;
                 /* 呼気前指標は「最後の静穏時」の値を使う。onset時点の窓は
                  * 既に呼気サンプルを含み、RHもフィルタ遅延のないぶん
                  * 先に上がっている(test_bapが捕捉した欠陥) */

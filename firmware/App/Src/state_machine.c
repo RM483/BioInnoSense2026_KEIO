@@ -203,6 +203,9 @@ static void start_breath_session(sm_t *sm, uint32_t now)
      * DGS2のSleepはバイアス維持のため再ウォームアップ不要(データシート) */
     bool warm = (now - sm->boot_ms) >= CFG_WARMUP_MS;
     bap_init(&sm->bap, sm->session_id, warm);
+    /* セッション開始前から低電池なら結果フラグへ引き継ぐ
+     * (check_batteryは跨ぎ検出のため再通知されない — レビューF2) */
+    sm->bap.low_batt = sm->low_batt_sent;
     dgs2_cmd_continuous_toggle(sm->sensor);
     enter_state(sm, SM_WARMUP, now);
     send_phase(sm, HPP_PHASE_WARMUP, 0);
