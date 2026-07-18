@@ -38,9 +38,8 @@ describe('HydroPaw Web SPA (MockProvider)', () => {
     // フルスクリーンの測定中ビュー
     expect(document.querySelector('.overlay')).toBeTruthy()
     await tick(1100)
-    expect(
-      ['安定', 'やや高め', '高め'],
-    ).toContain(document.querySelector('.ring-word')!.textContent)
+    // ウォームアップ中は状態語を断定しない(「…」+ 参考値のppmのみ)
+    expect(document.querySelector('.ring-word')!.textContent).toBe('…')
     const ppm1 = document.querySelector('.ring-ppm')!.textContent!
     expect(ppm1).toMatch(/ppm/)
 

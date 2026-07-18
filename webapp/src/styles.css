@@ -261,6 +261,8 @@ body {
   margin-top: 20px;
   text-align: center;
   max-width: 480px;
+  /* 1文字だけの折返し(「…ましょ / う」)を防ぐ — 監査P1 */
+  text-wrap: balance;
 }
 
 .dog-label {
@@ -286,6 +288,89 @@ body {
   font-weight: 500;
   line-height: 1.65;
   color: var(--text-primary);
+}
+
+/* 低い画面(小型iPhone相当)ではホームの縦を圧縮してCTAを1画面に収める — 監査P2 */
+@media (max-height: 700px) {
+  .care-ring {
+    width: 140px;
+    height: 140px;
+  }
+  .care-ring-rim {
+    width: 120px;
+    height: 120px;
+  }
+  .care-ring-face {
+    width: 108px;
+    height: 108px;
+  }
+  .home-words {
+    margin-top: 12px;
+  }
+  .home-words .phrase {
+    font-size: 21px;
+  }
+  .home-words .action {
+    margin-top: 6px;
+  }
+  .trend-flat {
+    margin-top: 14px;
+    padding-top: 10px;
+    order: 3; /* 低い画面ではCTAを先に見せる(主行動をフォールド内へ) */
+  }
+  .home-canvas {
+    padding-top: 4px;
+  }
+  .home-canvas .controls {
+    order: 2;
+    margin-top: 14px;
+  }
+}
+
+/* 非ブロッキング通知(接続失敗など)。エラー画面/alertを作らない — 監査P8 */
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(56px + 20px + env(safe-area-inset-bottom, 0px));
+  transform: translateX(-50%);
+  max-width: min(92vw, 420px);
+  padding: 12px 18px;
+  border-radius: 14px;
+  background: var(--card);
+  color: var(--text-primary);
+  font-size: 13.5px;
+  line-height: 1.55;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.14);
+  z-index: 60;
+  animation: toastIn 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  text-align: center;
+}
+@keyframes toastIn {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .toast { animation: none; }
+}
+
+/* 空状態を行き止まりにしないためのリンク風ボタン — 監査P3 */
+.empty-card {
+  text-align: center;
+  padding: 28px 20px;
+}
+.link-btn {
+  margin-top: 10px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 10px 16px; /* タップ領域44px確保 */
+  border-radius: 10px;
+}
+.link-btn:hover {
+  background: var(--accent-soft);
 }
 
 /* ここ7日のようす — 平置き(カードにしない) */

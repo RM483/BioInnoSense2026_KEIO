@@ -65,6 +65,14 @@ export default function App() {
   const [result, setResult] = useState<SessionSummary | null>(null)
   const [profile, setProfile] = useState<DogProfile>(loadProfile)
   const [busy, setBusy] = useState(false)
+  // 非ブロッキング通知(接続失敗など) — エラー画面/alertを作らない (docs/17 §10)
+  const [notice, setNotice] = useState<string | null>(null)
+  const noticeTimer = useRef<number | undefined>(undefined)
+  const showNotice = useCallback((m: string) => {
+    setNotice(m)
+    window.clearTimeout(noticeTimer.current)
+    noticeTimer.current = window.setTimeout(() => setNotice(null), 4500)
+  }, [])
   const sessionStart = useRef<Date | null>(null)
   const latest = samples.at(-1) ?? null
 
@@ -107,11 +115,11 @@ export default function App() {
       setFlow('measuring')
     } catch (e) {
       console.error(e)
-      alert((e as Error).message)
+      showNotice('接続できませんでした。デバイスの電源を確認して、もういちどお試しください')
     } finally {
       setBusy(false)
     }
-  }, [provider, conn])
+  }, [provider, conn, showNotice])
 
   const finishMeasurement = useCallback(async () => {
     setFlow('analyzing')
@@ -143,11 +151,12 @@ export default function App() {
     try {
       await provider.connect()
     } catch (e) {
-      alert((e as Error).message)
+      console.error(e)
+      showNotice('接続できませんでした。デバイスの電源を確認して、もういちどお試しください')
     } finally {
       setBusy(false)
     }
-  }, [provider])
+  }, [provider, showNotice])
 
   const disconnect = useCallback(async () => {
     setBusy(true)
@@ -212,7 +221,9 @@ export default function App() {
           onStart={startMeasurement}
         />
       )}
-      {tab === 'history' && <HistoryView history={history} />}
+      {tab === 'history' && (
+        <HistoryView history={history} onStartMeasure={() => go('measure')} />
+      )}
       {tab === 'dog' && (
         <DogView
           profile={profile}
@@ -251,6 +262,13 @@ export default function App() {
           </button>
         ))}
       </nav>
+
+      {/* ---- 非ブロッキング通知 (接続失敗など) ---- */}
+      {notice && (
+        <div className="toast" role="status" aria-live="polite">
+          {notice}
+        </div>
+      )}
 
       {/* ---- 測定フロー (フルスクリーンイベント) ---- */}
       {flow && (

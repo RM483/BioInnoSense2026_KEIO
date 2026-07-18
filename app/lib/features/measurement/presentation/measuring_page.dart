@@ -60,6 +60,19 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Reduce Motion: 呼吸アニメーションを止め、静的な中間状態で保持する
+    final reduce = MediaQuery.of(context).disableAnimations;
+    if (reduce && _breath.isAnimating) {
+      _breath.stop();
+      _breath.value = 0.5;
+    } else if (!reduce && !_breath.isAnimating) {
+      _breath.repeat(reverse: true);
+    }
+  }
+
+  @override
   void dispose() {
     _breath.dispose();
     super.dispose();

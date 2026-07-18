@@ -165,19 +165,30 @@ export function MeasureStartView(props: {
 
 /* ================= 履歴 ================= */
 
-export function HistoryView({ history }: { history: SessionSummary[] }) {
+export function HistoryView({
+  history,
+  onStartMeasure,
+}: {
+  history: SessionSummary[]
+  onStartMeasure: () => void
+}) {
+  // historyは保存時点で新しい順(App.tsxが先頭追加) — そのまま描画する。
+  // 注: 監査時に「古い順に見える」と誤検出したがseedデータの順序ミスだった。
   return (
     <div className="stack view">
       {history.length === 0 ? (
-        <section className="card">
+        <section className="card empty-card">
+          {/* 空状態を行き止まりにしない (docs/17 §9) */}
           <div className="empty-note">まだ測定がありません</div>
+          <button className="link-btn" onClick={onStartMeasure}>
+            測定をはじめる
+          </button>
         </section>
       ) : (
         <>
           <section className="card">
             <div className="card-head">
               <span className="label plain">最近の健康状態</span>
-              <span className="aside">{history.length}件</span>
             </div>
             <TrendLine history={history} tall />
             <p className="trend-summary">{windowSummary(history, 14)}</p>
@@ -420,8 +431,12 @@ export function MeasureFlow(props: {
               <span className="ring-analyzing">解析しています…</span>
             ) : (
               <>
-                <span className="ring-word" style={{ color: ppm === null ? 'var(--text-tertiary)' : color }}>
-                  {ppm === null ? '…' : levelShort[level]}
+                {/* ウォームアップ中は状態語を断定しない(Flutter側F5と同じ) */}
+                <span
+                  className="ring-word"
+                  style={{ color: ppm === null || warmingUp ? 'var(--text-tertiary)' : color }}
+                >
+                  {ppm === null || warmingUp ? '…' : levelShort[level]}
                 </span>
                 {ppm !== null && <span className="ring-ppm">{ppm.toFixed(1)} ppm</span>}
               </>
@@ -499,7 +514,8 @@ export function TrendLine({
   const W = 640
   const H = tall ? 132 : 96
   // ラベルは帯の内側(左)に置く。右は最新点のハロー(8px)ぶんを確保 (docs/16 R7/R13)
-  const PAD = { left: 6, right: 16, top: 8, bottom: 8 }
+  /* rightは最新点のハロー(半径~6)が縁に接しないよう20 — 監査P6 */
+  const PAD = { left: 6, right: 20, top: 8, bottom: 8 }
   const items = history.slice(0, tall ? 14 : 7).reverse()
   const ppms = items.map((h) => h.avgPpb / 1000)
   if (ppms.length < 2) return null
