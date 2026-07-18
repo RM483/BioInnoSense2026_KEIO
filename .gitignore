@@ -53,3 +53,5 @@ firebase/*-debug.log
 Thumbs.db
 .idea/
 .vscode/
+firmware/Tests/test_bap
+firmware/Tests/test_arq
