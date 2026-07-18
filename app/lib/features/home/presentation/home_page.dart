@@ -50,17 +50,26 @@ class HomePage extends ConsumerWidget {
             ),
             const SizedBox(height: 28),
 
-            // ---- 見守りリング (主役) ----
+            // ---- 見守りリング (主役 / VoiceOver対応: docs/17 A7,A20) ----
             Center(
-              child: GestureDetector(
-                onTap: () {
-                  HapticFeedback.selectionClick();
-                  context.go(Routes.measure);
-                },
-                child: StatusRing(
-                  size: 176,
-                  color: dog == null ? p.accent : level.color(p),
-                  photoUrl: dog?.photoUrl ?? '',
+              child: Semantics(
+                button: true,
+                label: dog == null
+                    ? l10n.registerDog
+                    : '${dog.name} — ${level.phrase(l10n)}',
+                hint: l10n.startMeasurement,
+                child: GestureDetector(
+                  onTap: () {
+                    HapticFeedback.selectionClick();
+                    context.go(Routes.measure);
+                  },
+                  child: ExcludeSemantics(
+                    child: StatusRing(
+                      size: 176,
+                      color: dog == null ? p.accent : level.color(p),
+                      photoUrl: dog?.photoUrl ?? '',
+                    ),
+                  ),
                 ),
               ),
             ),
@@ -207,20 +216,26 @@ class _TrendSection extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 14),
-          SizedBox(
-            height: 88,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _TrendLinePainter(
-                values: values,
-                lineColor: p.textSecondary.withOpacity(0.65),
-                normalBand: p.success,
-                guideColor: p.danger,
-                pointFill: p.card,
-                lastColor: level.color(p),
-                normalLabel: l10n.normalRangeLabel,
-                guideLabel: l10n.consultGuideLabel,
-                labelStyle: AppText.caption.copyWith(fontSize: 10.5),
+          // VoiceOverには要約文だけを読ませる(装飾は無音) — docs/17 A8
+          Semantics(
+            label: '${l10n.recent7days}。$summary',
+            child: ExcludeSemantics(
+              child: SizedBox(
+                height: 88,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _TrendLinePainter(
+                    values: values,
+                    lineColor: p.textSecondary.withOpacity(0.65),
+                    normalBand: p.success,
+                    guideColor: p.danger,
+                    pointFill: p.card,
+                    lastColor: level.color(p),
+                    normalLabel: l10n.normalRangeLabel,
+                    guideLabel: l10n.consultGuideLabel,
+                    labelStyle: AppText.caption.copyWith(fontSize: 10.5),
+                  ),
+                ),
               ),
             ),
           ),
@@ -267,7 +282,10 @@ class _PressableCtaState extends State<_PressableCta> {
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 150),
-          height: 58,
+          // Dynamic Type拡大でも文字が切れない (docs/17 A9)
+          constraints: const BoxConstraints(minHeight: 58),
+          padding:
+              const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: p.accent,
@@ -283,7 +301,8 @@ class _PressableCtaState extends State<_PressableCta> {
           child: Text(
             widget.label,
             style: AppText.bodyMedium.copyWith(
-              color: Colors.white,
+              // darkは明るいティール面のため黒文字(コントラスト確保) — docs/17 A21
+              color: p.onAccent,
               fontWeight: FontWeight.w600,
               fontSize: 17,
             ),

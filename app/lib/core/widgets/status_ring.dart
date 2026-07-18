@@ -58,7 +58,8 @@ class StatusRing extends StatelessWidget {
           height: inner,
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: p.cardElevated,
+            // 写真がない時の面はブランドの気配(Primary Soft) — docs/17 A19
+            color: Color.alphaBlend(p.accentSoft, p.card),
             image: photoUrl.isNotEmpty
                 ? DecorationImage(
                     image: NetworkImage(photoUrl), fit: BoxFit.cover)
@@ -66,7 +67,9 @@ class StatusRing extends StatelessWidget {
           ),
           child: photoUrl.isEmpty
               ? (child ??
-                  Icon(Icons.pets, size: inner * 0.42, color: p.textTertiary))
+                  Icon(Icons.pets,
+                      size: inner * 0.42,
+                      color: p.accent.withOpacity(0.55)))
               : null,
         ),
       ),

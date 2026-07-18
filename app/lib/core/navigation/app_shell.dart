@@ -97,6 +97,11 @@ class _TabItem extends StatelessWidget {
             const SizedBox(height: 3),
             Text(
               label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              // タブは1行を維持(Dynamic Typeは1.3xまで追従) — docs/17 A10
+              textScaler: MediaQuery.textScalerOf(context)
+                  .clamp(maxScaleFactor: 1.3),
               style: TextStyle(
                 fontSize: 10.5,
                 fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
