@@ -94,12 +94,12 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
                                               bleControllerProvider.notifier)
                                           .connect(d.id),
                                   child: connecting
-                                      ? const SizedBox(
+                                      ? SizedBox(
                                           width: 16,
                                           height: 16,
                                           child: CircularProgressIndicator(
                                               strokeWidth: 2,
-                                              color: Colors.white))
+                                              color: p.onAccent))
                                       : Text(l10n.connect),
                                 ),
                               ),
@@ -113,7 +113,8 @@ class _ConnectPageState extends ConsumerState<ConnectPage> {
               padding: const EdgeInsets.all(24),
               child: TextButton.icon(
                 icon: Icon(Icons.refresh, size: 18, color: p.textSecondary),
-                label: Text(l10n.scanning),
+                // 空状態の文言(探しています…)とボタンの役割を分離 — docs/17 A15
+                label: Text(l10n.scanAgain),
                 onPressed: () =>
                     ref.read(bleControllerProvider.notifier).startScan(),
               ),

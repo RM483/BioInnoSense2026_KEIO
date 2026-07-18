@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:intl/intl.dart';
 
+import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../dogs/application/dog_controller.dart';
@@ -90,16 +91,23 @@ class HistoryPage extends ConsumerWidget {
                         AppText.largeTitle.copyWith(color: p.textPrimary)),
                 const SizedBox(height: 20),
                 if (items.isEmpty)
+                  // 空状態も行き止まりにしない (docs/17 §9, A11)
                   Padding(
-                    padding: const EdgeInsets.only(top: 120),
+                    padding: const EdgeInsets.only(top: 110),
                     child: Column(
                       children: [
-                        Icon(Icons.timeline,
-                            size: 30, color: p.textTertiary),
+                        Icon(Icons.pets, size: 30, color: p.textTertiary),
                         const SizedBox(height: 12),
                         Text(l10n.noMeasurementYet,
                             style: AppText.body
                                 .copyWith(color: p.textSecondary)),
+                        const SizedBox(height: 6),
+                        TextButton(
+                          onPressed: () => context.go(Routes.measure),
+                          child: Text(l10n.startMeasurement,
+                              style: AppText.bodyMedium
+                                  .copyWith(color: p.accent)),
+                        ),
                       ],
                     ),
                   )

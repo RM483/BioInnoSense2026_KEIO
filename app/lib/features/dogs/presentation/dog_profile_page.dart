@@ -84,8 +84,8 @@ class DogProfilePage extends HookConsumerWidget {
                         shape: BoxShape.circle,
                         border: Border.all(color: p.bg, width: 3),
                       ),
-                      child: const Icon(Icons.camera_alt,
-                          size: 16, color: Colors.white),
+                      child: Icon(Icons.camera_alt,
+                          size: 16, color: p.onAccent),
                     ),
                   ),
                 ],
@@ -194,11 +194,11 @@ class DogProfilePage extends HookConsumerWidget {
                     }
                   },
             child: saving
-                ? const SizedBox(
+                ? SizedBox(
                     width: 22,
                     height: 22,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2.2, color: Colors.white))
+                        strokeWidth: 2.2, color: p.onAccent))
                 : Text(l10n.save),
           ),
         ],

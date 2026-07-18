@@ -70,7 +70,7 @@ class ResultPage extends ConsumerWidget {
               ),
               const Spacer(),
 
-              // ---- 詳細(控えめな数値) ----
+              // ---- 詳細(控えめな数値 — 単位は小さく添える: docs/17 A18) ----
               if (summary != null)
                 AppCard(
                   padding: const EdgeInsets.symmetric(
@@ -81,23 +81,42 @@ class ResultPage extends ConsumerWidget {
                         label: l10n.resultDuration,
                         value: l10n.minutesShort(
                             (summary.durationS / 60).ceil()),
+                        unit: '',
                       ),
                       _Hairline(),
                       _Stat(
                         label: l10n.average,
-                        value:
-                            '${summary.avgPpm.toStringAsFixed(1)} ${l10n.ppm}',
+                        value: summary.avgPpm.toStringAsFixed(1),
+                        unit: l10n.ppm,
                       ),
                       _Hairline(),
                       _Stat(
                         label: l10n.peak,
-                        value:
-                            '${summary.maxPpm.toStringAsFixed(1)} ${l10n.ppm}',
+                        value: summary.maxPpm.toStringAsFixed(1),
+                        unit: l10n.ppm,
                       ),
                     ],
                   ),
                 ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 14),
+
+              // 電池の助言(責めない言葉で) — docs/17 A16
+              if (ref.watch(measurementControllerProvider).lowBattery) ...[
+                Text(
+                  l10n.batteryAdvice,
+                  textAlign: TextAlign.center,
+                  style: AppText.caption.copyWith(color: p.warn),
+                ),
+                const SizedBox(height: 8),
+              ],
+              // 医療免責 — docs/17 A12
+              Text(
+                l10n.disclaimer,
+                textAlign: TextAlign.center,
+                style: AppText.caption.copyWith(
+                    color: p.textTertiary, fontSize: 11.5),
+              ),
+              const SizedBox(height: 14),
               FilledButton(
                 onPressed: goHome,
                 child: Text(l10n.backToHome),
@@ -111,9 +130,10 @@ class ResultPage extends ConsumerWidget {
 }
 
 class _Stat extends StatelessWidget {
-  const _Stat({required this.label, required this.value});
+  const _Stat({required this.label, required this.value, required this.unit});
   final String label;
   final String value;
+  final String unit;
 
   @override
   Widget build(BuildContext context) {
@@ -121,8 +141,23 @@ class _Stat extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(value,
-              style: AppText.bodyMedium.copyWith(color: p.textPrimary)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text(value,
+                  style: AppText.bodyMedium
+                      .copyWith(color: p.textPrimary)),
+              if (unit.isNotEmpty) ...[
+                const SizedBox(width: 3),
+                // 数値は証拠であって主張ではない — 単位は60%で添える
+                Text(unit,
+                    style: AppText.caption.copyWith(
+                        color: p.textTertiary, fontSize: 10.5)),
+              ],
+            ],
+          ),
           const SizedBox(height: 3),
           Text(label,
               style: AppText.caption.copyWith(color: p.textTertiary)),
