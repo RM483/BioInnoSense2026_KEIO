@@ -22,6 +22,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
     required this.textTertiary,
     required this.accent,
     required this.accentSoft,
+    required this.onAccent,
     required this.warn,
     required this.warnSoft,
     required this.danger,
@@ -35,28 +36,32 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color textPrimary;
   final Color textSecondary;
   final Color textTertiary;
-  final Color accent;        // ブランドブルー(CTA・グラフ・アクティブ)
-  final Color accentSoft;    // アクセントの淡い面(バッジ・塗り)
+  final Color accent;        // ブランド色 Mizuha(CTA・アクティブ・リング面)
+  final Color accentSoft;    // ブランドの気配(面・チップ)
+  final Color onAccent;      // accent上の文字色(darkは明るいティールのため黒)
   final Color warn;          // H2高値・注意(琥珀)
   final Color warnSoft;
   final Color danger;
   final Color success;
 
+  /// HydroPaw固有色 Mizuha(水羽) — 「水」と「生命」の交点 (docs/17 §3)。
+  /// 状態色は珊瑚(受診目安)・琥珀(注意)・緑(安定)で、赤いエラー色を持たない。
   static const light = AppPalette(
     // 暖かい紙色 — 医療の冷たさを消し「見守り」の温度に (docs/16 §5)
     bg: Color(0xFFF6F5F2),
     card: Color(0xFFFFFFFF),
     cardElevated: Color(0xFFF0EFEA),
     hairline: Color(0x14000000),
-    textPrimary: Color(0xFF17181C),
+    textPrimary: Color(0xFF1C1C1E),
     textSecondary: Color(0xFF6E7076),
     textTertiary: Color(0xFFA3A5AB),
-    accent: Color(0xFF2563EB),
-    accentSoft: Color(0x142563EB),
-    warn: Color(0xFFD97706),
-    warnSoft: Color(0x14D97706),
-    danger: Color(0xFFE5484D),
-    success: Color(0xFF16A34A),
+    accent: Color(0xFF12766B),
+    accentSoft: Color(0x1A12766B),
+    onAccent: Color(0xFFFFFFFF),
+    warn: Color(0xFFC8811F),
+    warnSoft: Color(0x14C8811F),
+    danger: Color(0xFFCE544C),
+    success: Color(0xFF2F9E6E),
   );
 
   static const dark = AppPalette(
@@ -67,12 +72,13 @@ class AppPalette extends ThemeExtension<AppPalette> {
     textPrimary: Color(0xFFF2F2F4),
     textSecondary: Color(0xFF9B9DA3),
     textTertiary: Color(0xFF5F6167),
-    accent: Color(0xFF5B8DEF),
-    accentSoft: Color(0x1F5B8DEF),
-    warn: Color(0xFFF5A623),
-    warnSoft: Color(0x1FF5A623),
-    danger: Color(0xFFF2555A),
-    success: Color(0xFF3DD68C),
+    accent: Color(0xFF4FB8A5),
+    accentSoft: Color(0x244FB8A5),
+    onAccent: Color(0xFF0E0F12),
+    warn: Color(0xFFE8A94E),
+    warnSoft: Color(0x1FE8A94E),
+    danger: Color(0xFFE9736C),
+    success: Color(0xFF46C68A),
   );
 
   @override
@@ -92,6 +98,7 @@ class AppPalette extends ThemeExtension<AppPalette> {
       textTertiary: l(textTertiary, other.textTertiary),
       accent: l(accent, other.accent),
       accentSoft: l(accentSoft, other.accentSoft),
+      onAccent: l(onAccent, other.onAccent),
       warn: l(warn, other.warn),
       warnSoft: l(warnSoft, other.warnSoft),
       danger: l(danger, other.danger),
@@ -214,7 +221,7 @@ abstract final class AppTheme {
       filledButtonTheme: FilledButtonThemeData(
         style: FilledButton.styleFrom(
           backgroundColor: p.accent,
-          foregroundColor: Colors.white,
+          foregroundColor: p.onAccent,
           disabledBackgroundColor: p.cardElevated,
           disabledForegroundColor: p.textTertiary,
           minimumSize: const Size.fromHeight(54),
