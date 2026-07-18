@@ -143,5 +143,17 @@
   "minutesShort": "{m}分",
   "@minutesShort": { "placeholders": { "m": { "type": "int" } } },
   "demoModeDescription": "実機なしのデモデータで動作中",
+  "breathReady": "呼気を待っています — センサーを口元へ",
+  "retryingMeasure": "もういちど、ていねいに測っています",
+  "stopEarly": "中止する",
+  "qualityLabel": "測定の質",
+  "qualityHigh": "高い",
+  "qualityMedium": "ふつう",
+  "qualityLow": "低い",
+  "remeasureAdvice": "もういちど測ると、より確かな記録になります",
+  "remeasureAction": "もういちど測る",
+  "sensorHealthNote": "センサーの調子がいつもと違うようです。数値は参考としてご覧ください",
+  "errorTitleNoBreath": "もういちど呼気を当ててみましょう",
+  "errorNoBreath": "呼気を検出できませんでした。センサーを口元に近づけて、静かに待ってみてください",
   "aboutDevice": "測定デバイス"
 }

@@ -143,5 +143,17 @@
   "minutesShort": "{m} min",
   "@minutesShort": { "placeholders": { "m": { "type": "int" } } },
   "demoModeDescription": "Running on demo data (no device)",
+  "breathReady": "Waiting for a breath — hold the sensor near the muzzle",
+  "retryingMeasure": "Measuring once more, gently",
+  "stopEarly": "Stop",
+  "qualityLabel": "Measurement quality",
+  "qualityHigh": "High",
+  "qualityMedium": "Fair",
+  "qualityLow": "Low",
+  "remeasureAdvice": "Measuring again will make this record more reliable",
+  "remeasureAction": "Measure again",
+  "sensorHealthNote": "The sensor seems off today. Treat these values as a reference",
+  "errorTitleNoBreath": "Let\u2019s try the breath again",
+  "errorNoBreath": "No breath was detected. Hold the sensor near the muzzle and wait calmly",
   "aboutDevice": "Device"
 }

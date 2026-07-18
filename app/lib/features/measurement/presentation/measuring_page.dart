@@ -1,8 +1,10 @@
 /// 測定中 — フルスクリーンの静かな画面。
 /// 主役は「いまの状態の言葉」。数値(ppm)は補助情報として小さく添える。
-/// 開始は画面表示と同時に自動で行われ、ユーザーは「終了する」だけ。
-/// 終了後は「解析しています…」の間(最低1.2s)を置いてから結果へ —
-/// 測定をひとつのイベントとして完結させる。
+/// 開始は画面表示と同時に自動で行われる。呼気セッション(BAP, docs/18)は
+/// FW側が WARMUP→READY→呼気検出→解析→採点 まで進め、結果は自動で届く。
+/// EVT_PHASEの実況を言葉に変換して表示し、ユーザー操作は不要にする。
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -12,6 +14,7 @@ import '../../../core/router/app_router.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../ble/application/ble_controller.dart';
+import '../../ble/data/hpp_codec.dart';
 import '../../dogs/application/dog_controller.dart';
 import '../../error/presentation/error_page.dart';
 import '../../insights/domain/health_assessment.dart';
@@ -41,13 +44,18 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
   @override
   void initState() {
     super.initState();
-    // 画面表示と同時に測定開始(体験をひとつながりにする)
+    // 画面表示と同時に呼気セッション開始(体験をひとつながりにする)。
+    // FWがWARMUP→READY→呼気検出→解析→採点まで進め、結果は自動で届く。
     Future.microtask(() {
       HapticFeedback.lightImpact();
+      final dog = ref.read(selectedDogProvider);
+      final ble = ref.read(bleControllerProvider);
       final c = ref.read(measurementControllerProvider.notifier);
-      c
-        ..resetSession()
-        ..start();
+      c.resetSession();
+      unawaited(c.startBreath(
+        dogId: dog?.id ?? '',
+        deviceId: ble.connectedDeviceId ?? '',
+      ));
     });
   }
 
@@ -90,9 +98,11 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
     final level = latest == null
         ? null
         : HealthAssessment.levelForPpm(latest.h2Ppm);
-    // 終了後〜結果表示までは「解析しています…」の静かな間
+    // 「解析しています…」= FWのANALYZE実況 or 終了処理〜結果表示の間
     final analyzing = measure.phase == MeasurePhase.stopping ||
-        measure.phase == MeasurePhase.saved;
+        measure.phase == MeasurePhase.saved ||
+        measure.devicePhase == Hpp.phaseAnalyze ||
+        measure.devicePhase == Hpp.phaseDone;
 
     return Scaffold(
       body: SafeArea(
@@ -222,13 +232,20 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
               const SizedBox(height: 6),
               AnimatedSwitcher(
                 duration: const Duration(milliseconds: 300),
+                // FWのEVT_PHASE実況を「次に何をすればいいか」の言葉に変換
                 child: Text(
                   analyzing
                       ? l10n.analyzingSub
-                      : (latest?.isWarmup ?? false)
-                          ? l10n.warmingUp
-                          : l10n.measuringCalm,
-                  key: ValueKey(analyzing),
+                      : switch (measure.devicePhase) {
+                          Hpp.phaseWarmup => l10n.warmingUp,
+                          Hpp.phaseReady => l10n.breathReady,
+                          Hpp.phaseRetry => l10n.retryingMeasure,
+                          Hpp.phaseBreath => l10n.measuringCalm,
+                          _ => (latest?.isWarmup ?? false)
+                              ? l10n.warmingUp
+                              : l10n.measuringCalm,
+                        },
+                  key: ValueKey('${analyzing}-${measure.devicePhase}'),
                   style: AppText.caption.copyWith(color: p.textSecondary),
                 ),
               ),
@@ -249,7 +266,7 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
               ),
               const SizedBox(height: 24),
 
-              // ---- 終了 (解析中は静かに消える) ----
+              // ---- 中止 (結果は自動で届くため、ボタンは離脱用) ----
               AnimatedOpacity(
                 duration: const Duration(milliseconds: 300),
                 opacity: analyzing ? 0 : 1,
@@ -262,14 +279,23 @@ class _MeasuringPageState extends ConsumerState<MeasuringPage>
                       ? null
                       : () {
                           HapticFeedback.lightImpact();
-                          _stopPressedAt = DateTime.now();
-                          ref
-                              .read(
-                                  measurementControllerProvider.notifier)
-                              .stopAndSave(dog?.id ?? '',
-                                  ble.connectedDeviceId ?? '');
+                          if (measure.breathMode) {
+                            // 呼気セッションはFWへ中止を伝えて戻る
+                            unawaited(ref
+                                .read(measurementControllerProvider.notifier)
+                                .abortBreath());
+                            context.pop();
+                          } else {
+                            _stopPressedAt = DateTime.now();
+                            ref
+                                .read(measurementControllerProvider.notifier)
+                                .stopAndSave(dog?.id ?? '',
+                                    ble.connectedDeviceId ?? '');
+                          }
                         },
-                  child: Text(l10n.finishMeasurement),
+                  child: Text(measure.breathMode
+                      ? l10n.stopEarly
+                      : l10n.finishMeasurement),
                 ),
               ),
             ],

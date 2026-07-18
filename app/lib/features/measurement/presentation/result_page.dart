@@ -68,7 +68,45 @@ class ResultPage extends ConsumerWidget {
                 level.phrase(l10n),
                 style: AppText.body.copyWith(color: p.textSecondary),
               ),
+
+              // ---- 測定の質(BAP品質スコアの言葉化 — 数値は出さない) ----
+              if (summary != null && summary.hasQuality) ...[
+                const SizedBox(height: 14),
+                _QualityBadge(quality: summary.quality),
+              ],
               const Spacer(),
+
+              // 低品質時は再測定を「提案」する(押し付けない — docs/18 §S8)
+              if (summary != null && summary.remeasureAdvised) ...[
+                Text(
+                  l10n.remeasureAdvice,
+                  textAlign: TextAlign.center,
+                  style: AppText.caption.copyWith(color: p.textSecondary),
+                ),
+                TextButton(
+                  onPressed: () {
+                    ref
+                        .read(measurementControllerProvider.notifier)
+                        .resetSession();
+                    context.go(Routes.measure);
+                  },
+                  child: Text(l10n.remeasureAction,
+                      style:
+                          AppText.bodyMedium.copyWith(color: p.accent)),
+                ),
+                const SizedBox(height: 6),
+              ],
+              // 計測器の不調はユーザーの失敗と区別して伝える (信頼度C)
+              if (summary != null &&
+                  summary.hasQuality &&
+                  summary.confidence < 70) ...[
+                Text(
+                  l10n.sensorHealthNote,
+                  textAlign: TextAlign.center,
+                  style: AppText.caption.copyWith(color: p.warn),
+                ),
+                const SizedBox(height: 10),
+              ],
 
               // ---- 詳細(控えめな数値 — 単位は小さく添える: docs/17 A18) ----
               if (summary != null)
@@ -124,6 +162,37 @@ class ResultPage extends ConsumerWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// 測定の質を言葉で伝えるバッジ。
+/// Q≥80=高い(緑) / 60-79=ふつう(ブランド) / <60=低い(琥珀)。
+/// 数値のQ/Cは詳細画面と研究用エクスポートにのみ出す(docs/17の思想)。
+class _QualityBadge extends StatelessWidget {
+  const _QualityBadge({required this.quality});
+  final int quality;
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final p = context.palette;
+    final (label, color) = quality >= 80
+        ? (l10n.qualityHigh, p.success)
+        : quality >= 60
+            ? (l10n.qualityMedium, p.accent)
+            : (l10n.qualityLow, p.warn);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        '${l10n.qualityLabel} · $label',
+        style: AppText.caption
+            .copyWith(color: color, fontWeight: FontWeight.w600),
       ),
     );
   }

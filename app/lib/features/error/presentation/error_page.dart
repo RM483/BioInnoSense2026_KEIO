@@ -13,12 +13,14 @@ enum ErrorKind {
   bleDisconnected,
   network,
   lowBattery,
+  noBreath,
   unknown;
 
   /// HPPエラーコード → 表示種別
   static ErrorKind fromHpp(int? code) => switch (code) {
         0x01 || 0x02 => ErrorKind.sensorTimeout,
         0x07 => ErrorKind.lowBattery,
+        0x0A => ErrorKind.noBreath, // E_NO_BREATH (READYタイムアウト)
         _ => ErrorKind.unknown,
       };
 }
@@ -57,6 +59,12 @@ class ErrorPage extends StatelessWidget {
           l10n.errorTitleBattery,
           l10n.errorLowBattery,
           l10n.okUnderstood,
+        ),
+      ErrorKind.noBreath => (
+          Icons.air_outlined,
+          l10n.errorTitleNoBreath,
+          l10n.errorNoBreath,
+          l10n.retry,
         ),
       ErrorKind.unknown => (
           Icons.refresh_outlined,
