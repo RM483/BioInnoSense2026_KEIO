@@ -20,6 +20,8 @@ abstract final class Hpp {
   static const cmdGetStatus = 0x06;
   static const cmdGetInfo = 0x07;
   static const cmdZero = 0x08; // DGS2ゼロ校正(クリーンエア中)
+  static const cmdAckEvt = 0x09; // 信頼配送イベントの受領ACK(payload=SEQ)
+  static const cmdBreath = 0x0A; // 呼気イベント測定セッション開始 (docs/18)
   // 応答・イベント (FW→App)
   static const ack = 0x40;
   static const nak = 0x41;
@@ -28,12 +30,31 @@ abstract final class Hpp {
   static const evtStatus = 0x83;
   static const evtError = 0x84;
   static const evtInfo = 0x85;
+  static const evtResult = 0x86; // 呼気解析結果30B (要ACK_EVT — 選択的ARQ)
+  static const evtPhase = 0x87; // 状態遷移通知 {phase, detail}
 
   // EVT_DATA flags
   static const flagOutOfRange = 1 << 0;
   static const flagStuck = 1 << 1;
   static const flagWarmup = 1 << 2;
   static const flagUnstable = 1 << 3;
+
+  // EVT_PHASE phase値 (hpp.h hpp_phase_t と1:1)
+  static const phaseWarmup = 0;
+  static const phaseReady = 1;
+  static const phaseBreath = 2;
+  static const phaseAnalyze = 3;
+  static const phaseRetry = 4;
+  static const phaseDone = 5;
+  static const phaseAborted = 6;
+
+  // EVT_RESULT flags (bap.h BAP_RF_* と1:1)
+  static const rfRemeasure = 0x01;
+  static const rfRhOk = 0x02;
+  static const rfTruncated = 0x04;
+  static const rfRetried = 0x08;
+  static const rfWarmupOk = 0x10;
+  static const rfLowBatt = 0x20;
 }
 
 /// デコード済みフレーム
@@ -78,6 +99,26 @@ class HppFrame {
   int get ackCmd => payload[0];
   int get nakError => payload[1];
   int get errorCode => payload[0];
+
+  // ---- EVT_PHASE アクセサ ----
+  int get phase => payload[0];
+  int get phaseDetail => payload.length >= 2 ? payload[1] : 0;
+
+  // ---- EVT_RESULT アクセサ (30B, firmware send_result と1:1) ----
+  int get resultSessionId => payload[0];
+  int get resultQuality => payload[1]; // Q 0-100
+  int get resultConfidence => payload[2]; // C 0-100
+  int get resultFlags => payload[3];
+  int get resultBaselinePpb => _view.getInt32(4, Endian.little);
+  int get resultPeakPpb => _view.getInt32(8, Endian.little);
+  int get resultPlateauPpb => _view.getInt32(12, Endian.little);
+  int get resultAucPpbS => _view.getUint32(16, Endian.little);
+  double get resultRiseS => _view.getUint16(20, Endian.little) / 10.0;
+  double get resultDurationS => _view.getUint16(22, Endian.little) / 10.0;
+  double get resultTempC => _view.getInt16(24, Endian.little) / 10.0;
+  double get resultRhDelta => _view.getInt16(26, Endian.little) / 10.0;
+  int get resultPreMadPpb => _view.getUint16(28, Endian.little);
+  bool get resultRemeasureAdvised => (resultFlags & Hpp.rfRemeasure) != 0;
 }
 
 /// CRC16 CCITT-FALSE (poly 0x1021, init 0xFFFF) — C実装と同一。

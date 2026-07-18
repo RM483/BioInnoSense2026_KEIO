@@ -40,9 +40,13 @@ class Measurement with _$Measurement {
     required int avgPpb,
     required int maxPpb,
     required int minPpb,
-    required String mode, // 'continuous' | 'single'
+    required String mode, // 'continuous' | 'single' | 'breath'
     @Default([]) List<H2Sample> series, // 間引き済み(最大600点)
     @Default('') String note,
+    // ---- v2: 呼気解析結果 (BAP, docs/18)。-1 = ラボモード/旧データ ----
+    @Default(-1) int quality, // Q: この測定は信頼できるか (0-100)
+    @Default(-1) int confidence, // C: 計測器は健全か (0-100)
+    @Default(0) int qualityFlags, // Hpp.rf* ビットマスク
   }) = _Measurement;
 
   const Measurement._();
@@ -52,6 +56,9 @@ class Measurement with _$Measurement {
 
   double get avgPpm => avgPpb / 1000.0;
   double get maxPpm => maxPpb / 1000.0;
+
+  bool get hasQuality => quality >= 0;
+  bool get remeasureAdvised => (qualityFlags & 0x01) != 0;
 }
 
 /// 系列を最大[maxPoints]点に間引く(等間隔サンプリング)。
