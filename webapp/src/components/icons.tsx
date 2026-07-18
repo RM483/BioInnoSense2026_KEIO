@@ -84,6 +84,46 @@ export const ExclamationIcon = ({ size = 12 }: IconProps) => (
   </svg>
 )
 
+/** カレンダー(日誌の表示切替用) */
+export const CalendarIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)}>
+    <rect x="4" y="5.5" width="16" height="14.5" rx="2.5" />
+    <path d="M4 10h16" />
+    <path d="M8.5 3.5v3M15.5 3.5v3" />
+  </svg>
+)
+
+/** リスト(日誌形式へ戻す) */
+export const ListIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M9 6.5h11M9 12h11M9 17.5h11" />
+    <path d="M4.5 6.5h.01M4.5 12h.01M4.5 17.5h.01" strokeWidth={2.6} />
+  </svg>
+)
+
+/** ＋(記録追加) */
+export const PlusIcon = ({ size = 20 }: IconProps) => (
+  <svg {...base(size)} strokeWidth={2.1}>
+    <path d="M12 5v14M5 12h14" />
+  </svg>
+)
+
+/** 本(履歴を見る導線用) */
+export const BookIcon = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M4 5.5A2.5 2.5 0 0 1 6.5 3H20v15.5H6.5A2.5 2.5 0 0 0 4 21V5.5Z" />
+    <path d="M4 18.5A2.5 2.5 0 0 1 6.5 16H20" />
+  </svg>
+)
+
+/** ペン(記録する導線用) */
+export const PenIcon = ({ size = 18 }: IconProps) => (
+  <svg {...base(size)}>
+    <path d="M14.5 4.5 19.5 9.5 8 21H3v-5L14.5 4.5Z" />
+    <path d="M12.5 6.5l5 5" />
+  </svg>
+)
+
 /** 肉球(塗り)。愛犬アバター用。 */
 export const PawIcon = ({ size = 28 }: IconProps) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor">

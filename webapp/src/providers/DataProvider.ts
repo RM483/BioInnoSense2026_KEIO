@@ -34,6 +34,8 @@ export interface SessionSummary {
   confidence?: number
   /** EVT_RESULT flags (bit0:REMEASURE bit1:RH_OK …) */
   qualityFlags?: number
+  /** 測定した犬 (多頭飼い対応, docs/21。App層が保存時に付与) */
+  dogId?: string
 }
 
 export type Unsubscribe = () => void

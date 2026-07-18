@@ -1,14 +1,17 @@
 /**
- * 各ビュー(ホーム/履歴/愛犬/設定) + 測定フロー(測定中→解析中→結果)。
- * 表示するのは「意味」— ppm等の数値は履歴・詳細・測定中の補助情報のみ。
+ * ホーム / 設定 + 測定フロー(測定中→解析中→結果) + 共有部品 (IA v2 — docs/21)。
+ * ホーム=測定の入口。日誌は journal.tsx、犬管理は dogsView.tsx に住む。
+ * 表示するのは「意味」— ppm等の数値は日誌・詳細・測定中の補助情報のみ。
  */
-import { useState } from 'react'
+import { useEffect, useRef } from 'react'
 import { Chart } from './components/Chart'
 import {
+  BookIcon,
   CheckIcon,
   CheckSmallIcon,
   ExclamationIcon,
   PawIcon,
+  PenIcon,
 } from './components/icons'
 import type {
   ConnectionStatus,
@@ -29,46 +32,168 @@ import {
   windowSummary,
   type HealthLevel,
 } from './lib/assessment'
-import { ageLabel, type DogProfile } from './lib/dogProfile'
+import type { Dog } from './lib/dogs'
 
 /* ================= ホーム ================= */
 
+/**
+ * ホーム = 測定の入口 + 見守り中の犬の切り替え (docs/21 v2.2 §1,2)。
+ * - 犬ごとのホームを「1枚のページ」として横スクロール(scroll-snap)。
+ *   指に追従してページ全体(リング/名前/状態/7日/CTA/副導線)がスライドし、
+ *   ページ単位で自然に停止する。挨拶・日付・ナビは固定。
+ * - 主CTAは大きな「◯◯の測定をはじめる」1つ。副導線はその下の段 (§1)
+ * - 見守り中が0頭なら空状態を表示する (§8)
+ */
 export function HomeView(props: {
+  dogs: Dog[] // 見守り中の犬のみ
+  index: number
+  historyFor: (dogId: string) => SessionSummary[]
+  conn: ConnectionStatus
+  busy: boolean
+  onIndex: (i: number) => void
+  onStart: (dog: Dog) => void
+  onOpenHistory: () => void
+  onAddNote: () => void
+  onRegisterDog: () => void
+}) {
+  const railRef = useRef<HTMLDivElement>(null)
+  const settleTimer = useRef<number | undefined>(undefined)
+
+  // 初期表示・外部からの切替時: 選択中のページへスクロールを合わせる
+  useEffect(() => {
+    const rail = railRef.current
+    if (!rail) return
+    const target = props.index * rail.clientWidth
+    if (Math.abs(rail.scrollLeft - target) > rail.clientWidth / 2) {
+      if (typeof rail.scrollTo === 'function') {
+        rail.scrollTo({ left: target })
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [props.index, props.dogs.length])
+
+  // ---- 空状態: 見守り中の犬がいない (§8) ----
+  if (props.dogs.length === 0) {
+    return (
+      <div className="stack view home-canvas">
+        <div className="greeting">{greeting()} · {todayLabel()}</div>
+        <button className="care-ring" onClick={props.onRegisterDog}
+          aria-label="愛犬を登録する"
+          style={{ background: 'color-mix(in srgb, var(--accent) 7%, transparent)' }}>
+          <span className="care-ring-rim"
+            style={{ borderColor: 'color-mix(in srgb, var(--accent) 55%, transparent)' }}>
+            <span className="care-ring-face"><PawIcon size={62} /></span>
+          </span>
+        </button>
+        <div className="home-words">
+          <h2 className="phrase">現在見守っている犬はいません</h2>
+          <p className="action">愛犬を登録すると、健康状態や測定結果を記録できます。</p>
+        </div>
+        <div className="controls home-cta">
+          <button className="btn primary" onClick={props.onRegisterDog}>
+            愛犬を登録する
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  // スクロール停止位置からページを確定し、見守る犬を切り替える
+  const onScroll = () => {
+    const rail = railRef.current
+    if (!rail || rail.clientWidth === 0) return
+    window.clearTimeout(settleTimer.current)
+    settleTimer.current = window.setTimeout(() => {
+      const i = Math.round(rail.scrollLeft / rail.clientWidth)
+      if (i !== props.index && i >= 0 && i < props.dogs.length) {
+        props.onIndex(i)
+      }
+    }, 90)
+  }
+
+  return (
+    <div className="view home-canvas full">
+      {/* ---- 固定ヘッダー: 挨拶 + 日付 (犬に依存しない) ---- */}
+      <div className="greeting">{greeting()} · {todayLabel()}</div>
+
+      {/* ---- 犬ごとのページ(全体がスライド §2) ---- */}
+      <div className="home-rail" ref={railRef} onScroll={onScroll}>
+        {props.dogs.map((dog, i) => (
+          <DogHomePage
+            key={dog.id}
+            dog={dog}
+            history={props.historyFor(dog.id)}
+            pageIndex={i}
+            pageCount={props.dogs.length}
+            conn={props.conn}
+            busy={props.busy}
+            onStart={() => props.onStart(dog)}
+            onOpenHistory={props.onOpenHistory}
+            onAddNote={props.onAddNote}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** 犬1頭ぶんのホームページ(リング〜副導線までがひとまとまり) */
+function DogHomePage(props: {
+  dog: Dog
   history: SessionSummary[]
-  dogName: string
+  pageIndex: number
+  pageCount: number
   conn: ConnectionStatus
   busy: boolean
   onStart: () => void
   onOpenHistory: () => void
+  onAddNote: () => void
 }) {
-  const a = assess(props.history)
+  const { dog, history } = props
+  const a = assess(history)
   const trend = trendLabel(a)
   const color = levelColor[a.level === 'none' ? 'none' : a.level]
-  return (
-    <div className="stack view home-canvas">
-      {/* ---- 挨拶 (話しかける入口) ---- */}
-      <div className="greeting">{greeting()} · {todayLabel()}</div>
 
-      {/* ---- 見守りリング (主役 / docs/16 案B) ---- */}
+  return (
+    <div className="home-page stack">
+      {/* ---- 見守りリング (主役 / docs/16 案B。写真があれば表示 §6) ---- */}
       <button
         className="care-ring"
         style={{ background: `color-mix(in srgb, ${color} 7%, transparent)` }}
         onClick={props.onStart}
-        aria-label="測定をはじめる"
+        aria-label={`${dog.name}の測定をはじめる`}
       >
         <span
           className="care-ring-rim"
           style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}
         >
           <span className="care-ring-face">
-            <PawIcon size={62} />
+            {dog.photo ? (
+              <img src={dog.photo} alt="" className="dog-photo" />
+            ) : (
+              <PawIcon size={62} />
+            )}
           </span>
         </span>
       </button>
 
-      {/* ---- 言葉: 名前 → 状態 → 変化 → 行動 → 最終測定 ---- */}
+      {/* ---- どの犬か一目で分かる: 名前 + ドット + 1/N (§2) ---- */}
       <div className="home-words">
-        <div className="dog-label">{props.dogName}</div>
+        <div className="dog-label">{dog.name}</div>
+        {props.pageCount > 1 && (
+          <div className="dog-pager"
+            aria-label={`${props.pageIndex + 1} / ${props.pageCount}頭目`}>
+            <span className="dots">
+              {Array.from({ length: props.pageCount }).map((_, i) => (
+                <span key={i}
+                  className={`dot ${i === props.pageIndex ? 'on' : ''}`} />
+              ))}
+            </span>
+            <span className="pager-count">
+              {props.pageIndex + 1} / {props.pageCount}
+            </span>
+          </div>
+        )}
         <h2 className="phrase">{levelPhrase[a.level]}</h2>
         {trend && <div className="trend-line-label center">{trend}</div>}
         <p className="action">{actionLabel(a)}</p>
@@ -79,26 +204,40 @@ export function HomeView(props: {
         )}
       </div>
 
-      {/* ---- ここ7日のようす (平置き・カードにしない) ---- */}
-      {props.history.length >= 2 && (
+      {/* ---- ここ7日のようす ---- */}
+      {history.length >= 2 && (
         <section className="trend-flat" onClick={props.onOpenHistory} role="button">
           <div className="card-head">
             <span className="label plain">ここ7日のようす</span>
             <StatusChip level={a.level} />
           </div>
-          <TrendLine history={props.history} />
-          <p className="trend-summary">{windowSummary(props.history)}</p>
+          <TrendLine history={history} />
+          <p className="trend-summary">{windowSummary(history)}</p>
         </section>
       )}
 
-      <div className="controls">
+      {/* ---- 1段目: 大きな主CTA (§1) / 2段目: 副導線 ---- */}
+      <div className="controls home-cta">
         <button
-          className="btn primary"
+          className="btn primary main-cta"
           onClick={props.onStart}
           disabled={props.busy || props.conn === 'connecting'}
         >
-          {props.conn === 'connecting' ? '接続しています…' : '測定をはじめる'}
+          {props.conn === 'connecting'
+            ? '接続しています…'
+            : `${dog.name}の測定をはじめる`}
         </button>
+        <div className="quiet-links">
+          <button className="quiet-link" onClick={props.onOpenHistory}>
+            <BookIcon size={17} />
+            履歴を見る
+          </button>
+          <span className="quiet-sep" />
+          <button className="quiet-link" onClick={props.onAddNote}>
+            <PenIcon size={17} />
+            きょうの記録
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -119,159 +258,6 @@ function todayLabel(): string {
   }).format(new Date())
 }
 
-/* ================= 測定 (開始前) ================= */
-
-export function MeasureStartView(props: {
-  dogName: string
-  conn: ConnectionStatus
-  busy: boolean
-  onStart: () => void
-}) {
-  const connected = props.conn === 'connected'
-  return (
-    <div className="stack view">
-      <section className="card flow" style={{ padding: '48px 24px' }}>
-        <div
-          className="ring-outer idle"
-          style={{
-            borderColor: `color-mix(in srgb, ${connected ? 'var(--accent)' : 'var(--text-tertiary)'} 30%, transparent)`,
-          }}
-        >
-          <div className="ring-inner">
-            <span style={{ color: connected ? 'var(--accent)' : 'var(--text-tertiary)' }}>
-              <PawIcon size={40} />
-            </span>
-          </div>
-        </div>
-        <h2 className="flow-title">{props.dogName}の呼気を測定</h2>
-        <p className="comment center">
-          {connected
-            ? 'マスクを軽くあてて、測定をはじめてください'
-            : '「はじめる」と同時にデバイスへ接続します'}
-        </p>
-        <div className="controls" style={{ width: '100%', maxWidth: 380 }}>
-          <button
-            className="btn primary"
-            onClick={props.onStart}
-            disabled={props.busy || props.conn === 'connecting'}
-          >
-            {props.conn === 'connecting' ? '接続しています…' : 'はじめる'}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-}
-
-/* ================= 履歴 ================= */
-
-export function HistoryView({
-  history,
-  onStartMeasure,
-}: {
-  history: SessionSummary[]
-  onStartMeasure: () => void
-}) {
-  // historyは保存時点で新しい順(App.tsxが先頭追加) — そのまま描画する。
-  // 注: 監査時に「古い順に見える」と誤検出したがseedデータの順序ミスだった。
-  return (
-    <div className="stack view">
-      {history.length === 0 ? (
-        <section className="card empty-card">
-          {/* 空状態を行き止まりにしない (docs/17 §9) */}
-          <div className="empty-note">まだ測定がありません</div>
-          <button className="link-btn" onClick={onStartMeasure}>
-            測定をはじめる
-          </button>
-        </section>
-      ) : (
-        <>
-          <section className="card">
-            <div className="card-head">
-              <span className="label plain">最近の健康状態</span>
-            </div>
-            <TrendLine history={history} tall />
-            <p className="trend-summary">{windowSummary(history, 14)}</p>
-          </section>
-          <section className="card">
-            <div className="history-list">
-              {history.map((h, i) => (
-                <HistoryRow key={`${h.startedAt}-${i}`} s={h} detail />
-              ))}
-            </div>
-          </section>
-        </>
-      )}
-    </div>
-  )
-}
-
-/* ================= 愛犬 ================= */
-
-export function DogView(props: {
-  profile: DogProfile
-  historyCount: number
-  onSave: (p: DogProfile) => void
-}) {
-  const [draft, setDraft] = useState(props.profile)
-  const [saved, setSaved] = useState(false)
-  const set = (k: keyof DogProfile) => (e: React.ChangeEvent<HTMLInputElement>) => {
-    setSaved(false)
-    setDraft({ ...draft, [k]: e.target.value })
-  }
-  return (
-    <div className="stack view">
-      <section className="card dog-hero">
-        <div className="avatar big">
-          <PawIcon size={40} />
-        </div>
-        <div className="dog-name">{draft.name || 'まだ名前がありません'}</div>
-        <div className="dog-sub">
-          {[draft.breed, ageLabel(draft), draft.weightKg && `${draft.weightKg}kg`]
-            .filter(Boolean)
-            .join(' · ')}
-        </div>
-        <div className="dog-count">これまでの記録 {props.historyCount}件</div>
-      </section>
-
-      <section className="card">
-        <div className="card-head">
-          <span className="label plain">プロフィール</span>
-        </div>
-        <div className="form">
-          <label>
-            <span>名前</span>
-            <input value={draft.name} onChange={set('name')} />
-          </label>
-          <label>
-            <span>犬種</span>
-            <input value={draft.breed} onChange={set('breed')} />
-          </label>
-          <label>
-            <span>体重 (kg)</span>
-            <input value={draft.weightKg} onChange={set('weightKg')} inputMode="decimal" />
-          </label>
-          <label>
-            <span>生まれた年</span>
-            <input value={draft.birthYear} onChange={set('birthYear')} inputMode="numeric" />
-          </label>
-        </div>
-        <div className="controls" style={{ marginTop: 18 }}>
-          <button
-            className="btn primary"
-            onClick={() => {
-              props.onSave(draft)
-              setSaved(true)
-            }}
-          >
-            {saved ? '保存しました' : '保存'}
-          </button>
-        </div>
-      </section>
-    </div>
-  )
-}
-
 /* ================= 設定 ================= */
 
 export function SettingsView(props: {
@@ -279,6 +265,9 @@ export function SettingsView(props: {
   providerName: string
   latest: SensorSample | null
   busy: boolean
+  maxDogs: number
+  watchingCount: number
+  onChangeMaxDogs: (n: number) => void // 減数時の選択フローはApp側
   onConnect: () => void
   onDisconnect: () => void
   onClearHistory: () => void
@@ -326,6 +315,41 @@ export function SettingsView(props: {
               接続する
             </button>
           )}
+        </div>
+      </section>
+
+      {/* ---- 愛犬の登録設定 (デバイスとデータの間 §10) ---- */}
+      <section className="card" id="dog-settings">
+        <div className="card-head">
+          <span className="label plain">愛犬の登録設定</span>
+        </div>
+        <div className="kv">
+          <div className="row">
+            <span className="k">見守る愛犬</span>
+            <span className="v stepper">
+              <button
+                className="icon-btn"
+                aria-label="減らす"
+                disabled={props.maxDogs <= 1}
+                onClick={() => props.onChangeMaxDogs(props.maxDogs - 1)}
+              >
+                −
+              </button>
+              <span className="stepper-value">{props.maxDogs}頭</span>
+              <button
+                className="icon-btn"
+                aria-label="増やす"
+                disabled={props.maxDogs >= 9}
+                onClick={() => props.onChangeMaxDogs(props.maxDogs + 1)}
+              >
+                ＋
+              </button>
+            </span>
+          </div>
+          <div className="row">
+            <span className="k">現在見守り中</span>
+            <span className="v">{props.watchingCount}頭</span>
+          </div>
         </div>
       </section>
 

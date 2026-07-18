@@ -1072,3 +1072,489 @@ button:disabled { cursor: default; opacity: 0.4; }
   text-align: center;
   padding: 22px 0 14px;
 }
+
+/* ================================================================
+   IA v2 追加分 (docs/21) — 日誌 / 健康日誌シート / Dogsカルーセル
+   ================================================================ */
+
+/* ---- ホーム副導線 ---- */
+.quiet-links {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  margin-top: 14px;
+}
+.quiet-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  font-size: 15px;
+  font-weight: 500;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+.quiet-link:hover { color: var(--text-primary); }
+.quiet-sep {
+  width: 1px;
+  height: 16px;
+  background: var(--hairline);
+}
+
+/* ---- 日誌ヘッダ ---- */
+.journal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.journal-title {
+  flex: 1;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.4px;
+  margin: 0;
+}
+.back-btn {
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 15px;
+  font-weight: 600;
+  padding: 8px 8px 8px 0;
+  cursor: pointer;
+}
+.journal-actions { display: flex; gap: 4px; }
+.icon-btn {
+  border: none;
+  background: none;
+  color: var(--text-secondary);
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 20px;
+  line-height: 1;
+}
+.icon-btn:hover { background: var(--card-elevated); color: var(--text-primary); }
+
+/* ---- 日誌タイムライン ---- */
+.journal-day { display: flex; flex-direction: column; gap: 8px; }
+.day-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  padding-left: 4px;
+}
+.note-item .note-type {
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--text-primary);
+}
+.note-item .note-memo {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+  font-size: 13.5px;
+}
+.linklike.small { font-size: 12.5px; padding: 6px; }
+
+/* ---- カレンダー ---- */
+.cal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.cal-month { font-size: 16px; font-weight: 600; }
+.cal-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.cal-week {
+  text-align: center;
+  font-size: 11px;
+  color: var(--text-tertiary);
+  padding: 4px 0;
+}
+.cal-day {
+  border: none;
+  background: none;
+  border-radius: 50%;
+  aspect-ratio: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  cursor: pointer;
+}
+.cal-day.today { box-shadow: inset 0 0 0 1.2px var(--hairline); }
+.cal-day.sel {
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-weight: 700;
+}
+.cal-dot { width: 5px; height: 5px; border-radius: 50%; }
+
+/* ---- 日誌入力シート ---- */
+.sheet-overlay {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.32);
+}
+.sheet {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 10px 10px;
+  background: var(--card);
+  border-radius: 24px;
+  padding: 14px 20px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  box-shadow: var(--shadow);
+}
+.sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--hairline);
+  margin: 0 auto;
+}
+.sheet-title { font-size: 19px; font-weight: 600; margin: 0; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-row.ratings .select-chip { flex: 1; text-align: center; }
+.select-chip {
+  border: 1.2px solid transparent;
+  background: var(--card-elevated);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 14px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.select-chip.on {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.select-chip.warn.on {
+  background: var(--warn-soft);
+  border-color: var(--warn);
+  color: var(--warn);
+}
+.memo-input {
+  border: none;
+  background: var(--card-elevated);
+  border-radius: 14px;
+  padding: 14px 16px;
+  font-size: 15px;
+  font-family: inherit;
+  color: var(--text-primary);
+  resize: none;
+}
+.memo-input:focus { outline: 1.5px solid var(--accent); }
+
+/* ---- Dogsカルーセル (scroll-snap = スワイプ切替) ---- */
+.view-title-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.view-title {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  margin: 0;
+}
+.comment.small { font-size: 12.5px; }
+.dog-rail {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  padding: 4px 2px 8px;
+  margin: 0 -4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.dog-rail::-webkit-scrollbar { display: none; }
+.dog-card {
+  flex: 0 0 84%;
+  max-width: 420px;
+  scroll-snap-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 28px 20px 20px;
+  cursor: pointer;
+}
+.dog-card.sel { border: 1.4px solid var(--accent); }
+.dog-card.add {
+  justify-content: center;
+  border-style: dashed;
+  border-width: 1.4px;
+  border-color: var(--hairline);
+  color: var(--text-secondary);
+  min-height: 220px;
+}
+.avatar.big.plus {
+  font-size: 30px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.accent-chip {
+  color: var(--accent);
+  background: var(--accent-soft);
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.btn.ghost.slim { padding: 10px 20px; margin-top: 6px; }
+.dots {
+  display: flex;
+  justify-content: center;
+  gap: 6px;
+}
+.dots .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--hairline);
+  transition: width 0.2s ease;
+}
+.dots .dot.on { width: 18px; background: var(--accent); }
+
+/* ================================================================
+   IA v2.1 追加分 (docs/21 v2.1) — Homeスワイプ / 犬管理 / 確認シート
+   ================================================================ */
+
+/* ---- Home: 1段目=主CTA(全幅) / 2段目=副導線 (§1) ---- */
+.controls.home-cta {
+  flex-direction: column;
+  align-items: stretch;
+}
+.controls.home-cta .btn.primary { width: 100%; }
+
+/* ---- Home: 犬ページャ (§2) ---- */
+.dog-pager {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 4px 0 6px;
+}
+.pager-arrow {
+  border: none;
+  background: none;
+  color: var(--text-tertiary);
+  font-size: 22px;
+  line-height: 1;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+.pager-arrow:hover:not(:disabled) { background: var(--card-elevated); color: var(--text-primary); }
+.pager-arrow:disabled { opacity: 0.25; cursor: default; }
+.pager-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- Dogs: 縦一覧カード (§4) ---- */
+.dog-card.vertical {
+  flex: none;
+  width: 100%;
+  max-width: none;
+  cursor: default;
+}
+.card-tail {
+  margin-top: 22px; /* 編集ボタンとの誤操作防止の余白 (§5,6) */
+  display: flex;
+  justify-content: center;
+}
+.linklike.subtle {
+  border: none;
+  background: none;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  padding: 8px 10px;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: var(--hairline);
+}
+.linklike.subtle:hover { color: var(--text-secondary); }
+.linklike.subtle.danger-text { color: color-mix(in srgb, var(--danger) 75%, var(--text-tertiary)); }
+.linklike.subtle.accent-text { color: var(--accent); font-weight: 600; text-decoration: none; }
+
+/* ---- 確認シート (§3,5,6,11,13) ---- */
+.sheet-title.center { text-align: center; }
+.sheet-body {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+  margin: 0;
+  text-align: center;
+}
+.sheet-avatar {
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 2px auto 0;
+}
+.sheet .btn.ghost { background: var(--card-elevated); }
+.reduce-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---- Settings: 頭数ステッパー (§10) ---- */
+.v.stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.stepper-value {
+  min-width: 44px;
+  text-align: center;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.v.stepper .icon-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--card-elevated);
+  font-size: 17px;
+  font-weight: 600;
+}
+.v.stepper .icon-btn:disabled { opacity: 0.3; }
+
+/* ================================================================
+   IA v2.2 追加分 — 全面ページスワイプ / 主CTA復元 / 愛犬写真
+   ================================================================ */
+
+/* ---- Home: 主CTAの高さを主役級に戻す (§1)。
+   親が column flex のため flex:1 が潰れる問題も解消 ---- */
+.controls.home-cta .btn.primary {
+  flex: none;
+  width: 100%;
+  height: auto;
+  min-height: 58px;
+  padding: 16px 24px;
+  border-radius: 29px;
+  font-size: 17px;
+}
+
+/* ---- Home: 犬ごとの全面ページ (§2) ---- */
+.home-canvas.full {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+.home-canvas.full .greeting { margin-bottom: 4px; }
+.home-rail {
+  display: flex;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin: 0 -20px; /* .view の左右paddingを打ち消して全幅で滑らせる */
+}
+.home-rail::-webkit-scrollbar { display: none; }
+.home-page {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  padding: 12px 20px 8px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+.home-page .care-ring { align-self: center; }
+
+/* ---- 愛犬写真 (§6): 円形領域へ中央トリミング表示 ---- */
+.dog-photo {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
+  display: block;
+}
+.care-ring-face { overflow: hidden; }
+.avatar.big { overflow: hidden; position: relative; }
+
+.photo-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+.photo-btn {
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+.photo-badge {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 16px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2.5px solid var(--card);
+}
+.photo-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+  max-width: 280px;
+}
+.photo-actions .btn.ghost.slim { margin-top: 0; }
+.photo-actions .danger-text { color: var(--danger); }
+
+/* ---- 確認シートのアバターも写真対応 ---- */
+.sheet-avatar { overflow: hidden; }
