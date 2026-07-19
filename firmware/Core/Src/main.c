@@ -29,6 +29,7 @@
 #include "state_machine.h"
 #include "power.h"
 #include "log.h"
+#include "bgapi.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -67,11 +68,15 @@ static dgs2_t     g_sensor;
 static ble_link_t g_link;
 static sm_t       g_sm;
 
-/* DGS2用UART4 (専用基板の実配線に合わせてUSER CODEで管理 — docs/15追補)
- * 基板: DGS2 TXD→A1(PA0)/RXD→A2(PA1)。PA0=UART4_TX/PA1=UART4_RXのため
- * 電気的に逆向きだが、CR2.SWAP(TX/RXピンスワップ)で救済する。
- * CubeMX管理外の理由: SWAP込みの特殊構成を再生成で失わないため。 */
+/* AC02(BLE)用UART4 — USER CODEで管理 (docs/15追補・リワーク後の最終形)
+ * リワーク後: DGS2はD8/D9(USART1)へ、A1/A2(UART4)はAC02専用。
+ * AC02はBGAPI@9600bps(公式サンプル/TBGLib準拠)。
+ * 注: DGS2単体検証(リワーク前)はビルドフラグ HYDROPAW_SENSOR_ON_UART4 で
+ *     旧構成(UART4+SWAP=センサ)に切替可能。 */
 UART_HandleTypeDef huart4;
+static bgapi_decoder_t g_bgapi;
+static uint8_t g_ble_conn;      /* BGAPI接続ハンドル(接続イベントで更新) */
+static bool    g_ble_connected;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -94,11 +99,16 @@ static void debug_uart_tx(const uint8_t *data, size_t len);
 /* ---- 注入コールバック (App層はHAL非依存のまま保つ) ---- */
 static void sensor_uart_tx(const uint8_t *data, size_t len)
 {
+#ifdef HYDROPAW_SENSOR_ON_UART4
     HAL_UART_Transmit(&huart4, (uint8_t *)data, (uint16_t)len, 100);
+#else
+    HAL_UART_Transmit(&huart1, (uint8_t *)data, (uint16_t)len, 100);
+#endif
 }
 
-/** DGS2用UART4の手動初期化 (9600 8N1 + TX/RXスワップ)。
- *  PA0/PA1 = AF8。スワップによりPA0=RX(←DGS2 TXD), PA1=TX(→DGS2 RXD)。 */
+/** UART4の手動初期化。
+ *  最終形(既定): AC02用 9600bps・スワップなし(AC02リーフは正しいクロス配線)。
+ *  HYDROPAW_SENSOR_ON_UART4定義時: リワーク前のDGS2単体検証用にSWAP有効。 */
 static void sensor_uart4_init(void)
 {
     __HAL_RCC_UART4_CLK_ENABLE();
@@ -120,8 +130,11 @@ static void sensor_uart4_init(void)
     huart4.Init.Mode = UART_MODE_TX_RX;
     huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
     huart4.Init.OverSampling = UART_OVERSAMPLING_16;
+#ifdef HYDROPAW_SENSOR_ON_UART4
+    /* リワーク前のDGS2単体検証: TXD→A1/RXD→A2の逆向き配線をSWAPで救済 */
     huart4.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_SWAP_INIT;
     huart4.AdvancedInit.Swap = UART_ADVFEATURE_SWAP_ENABLE;
+#endif
     if (HAL_UART_Init(&huart4) != HAL_OK) {
         Error_Handler();
     }
@@ -134,7 +147,24 @@ static void ble_uart_tx(const uint8_t *data, size_t len)
 {
     /* 実送信を先に行う — 診断ログがBLE送信タイミングへ影響しないこと
      * (非侵襲性レビュー docs/13 §4 参照)。ログは送信完了後に出す。 */
+#ifdef HYDROPAW_SENSOR_ON_UART4
+    /* リワーク前検証モード: 従来どおりUSART2へ生HPP */
     HAL_UART_Transmit(&huart2, (uint8_t *)data, (uint16_t)len, 100);
+#else
+    /* 最終形: HPPフレームをBGAPI notifyに包んでAC02(UART4)へ。
+     * 未接続時は送らない — クリティカルフレームはHPP側のARQが
+     * 接続回復後に再送するため、ここで落としてよい (docs/18 §4)。 */
+    if (!g_ble_connected) {
+        return;
+    }
+    uint8_t frame[BGAPI_HEADER_SIZE + BGAPI_MAX_PAYLOAD];
+    size_t n = bgapi_build_notify(g_ble_conn, BGAPI_NOTIFY_HANDLE,
+                                  data, (uint8_t)len, frame);
+    if (n == 0U) {
+        return;
+    }
+    HAL_UART_Transmit(&huart4, frame, (uint16_t)n, 100);
+#endif
 #ifndef HYDROPAW_LOG_DISABLE
     /* 送信フレームの種別/SEQを可視化(EVT_ERRORはコードも) */
     if (len >= HPP_HEADER_SIZE && data[0] == HPP_SOF) {
@@ -235,12 +265,38 @@ int main(void)
   ble_link_init(&g_link, ble_uart_tx);
   sm_init(&g_sm, &g_sensor, &g_link, power_read_battery_mv, HAL_GetTick());
 
-  /* DGS2は専用基板の実配線(A1/A2=UART4+SWAP)に合わせて初期化 */
+  /* UART4初期化 (既定=AC02/BGAPI、フラグ時=DGS2単体検証) */
   sensor_uart4_init();
 
+#ifndef HYDROPAW_SENSOR_ON_UART4
+  /* AC02 WAKEUP (D7=PB12) をHIGHにして起こす (docs/15 B6) */
+  GPIO_InitTypeDef wk = {0};
+  wk.Pin = GPIO_PIN_12;
+  wk.Mode = GPIO_MODE_OUTPUT_PP;
+  wk.Pull = GPIO_NOPULL;
+  wk.Speed = GPIO_SPEED_FREQ_LOW;
+  HAL_GPIO_Init(GPIOB, &wk);
+  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, GPIO_PIN_SET);
+
+  bgapi_decoder_init(&g_bgapi);
+  /* AC02は先に起動済みの可能性があるため、boot evtを待たず
+   * アドバタイズ開始を先行送信(重複してもrspが返るだけで無害) */
+  HAL_Delay(200);
+  {
+    uint8_t adv[8];
+    size_t n = bgapi_build_advertise(adv);
+    HAL_UART_Transmit(&huart4, adv, (uint16_t)n, 100);
+  }
+#endif
+
   /* 1バイト割込み受信を開始 (RxCpltCallbackで再アーム) */
+#ifdef HYDROPAW_SENSOR_ON_UART4
   HAL_UART_Receive_IT(&huart4, &rx_byte_sensor, 1);
   HAL_UART_Receive_IT(&huart2, &rx_byte_ble, 1);
+#else
+  HAL_UART_Receive_IT(&huart1, &rx_byte_sensor, 1);
+  HAL_UART_Receive_IT(&huart4, &rx_byte_ble, 1);
+#endif
 
   sm_state_t logged_state = g_sm.state;
   /* USER CODE END 2 */
@@ -272,11 +328,46 @@ int main(void)
 
     /* BLE受信処理 */
     hpp_frame_t frame;
+#ifdef HYDROPAW_SENSOR_ON_UART4
     while (rb_pop(&rb_ble, &b)) {
         if (ble_link_feed(&g_link, b, &frame)) {
             sm_on_frame(&g_sm, &frame, now);
         }
     }
+#else
+    /* BGAPIバイト列 → イベント解釈 → 書き込みペイロードをHPPへ */
+    while (rb_pop(&rb_ble, &b)) {
+        const uint8_t *wdata = NULL;
+        uint8_t wlen = 0;
+        uint8_t conn = 0;
+        switch (bgapi_feed(&g_bgapi, b, &wdata, &wlen, &conn)) {
+        case BGAPI_RX_BOOT:
+        case BGAPI_RX_DISCONNECTED: {
+            g_ble_connected = false;
+            uint8_t adv[8];
+            size_t n = bgapi_build_advertise(adv);
+            HAL_UART_Transmit(&huart4, adv, (uint16_t)n, 100);
+            LOG("BLE %s -> advertise",
+                g_ble_connected ? "boot" : "boot/disc");
+            break;
+        }
+        case BGAPI_RX_CONNECTED:
+            g_ble_conn = conn;
+            g_ble_connected = true;
+            LOG("BLE connected handle=%u", conn);
+            break;
+        case BGAPI_RX_WRITE:
+            for (uint8_t i = 0; i < wlen; i++) {
+                if (ble_link_feed(&g_link, wdata[i], &frame)) {
+                    sm_on_frame(&g_sm, &frame, now);
+                }
+            }
+            break;
+        default:
+            break;
+        }
+    }
+#endif
 
     sm_tick(&g_sm, now);
     HAL_IWDG_Refresh(&hiwdg);
@@ -584,24 +675,38 @@ static void MX_GPIO_Init(void)
 /**
   * @brief UART受信完了コールバック。ISRコンテキスト — バッファ格納と再アームのみ。
   */
+/* モード別のUART役割: 既定=センサUSART1/BLE UART4、
+ * HYDROPAW_SENSOR_ON_UART4=センサUART4/BLE USART2 (リワーク前検証) */
+#ifdef HYDROPAW_SENSOR_ON_UART4
+#define SENSOR_UART_INSTANCE  UART4
+#define SENSOR_UART_HANDLE    huart4
+#define BLE_UART_INSTANCE     USART2
+#define BLE_UART_HANDLE       huart2
+#else
+#define SENSOR_UART_INSTANCE  USART1
+#define SENSOR_UART_HANDLE    huart1
+#define BLE_UART_INSTANCE     UART4
+#define BLE_UART_HANDLE       huart4
+#endif
+
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == UART4) {
+    if (huart->Instance == SENSOR_UART_INSTANCE) {
         (void)rb_push(&rb_sensor, rx_byte_sensor);
-        HAL_UART_Receive_IT(&huart4, &rx_byte_sensor, 1);
-    } else if (huart->Instance == USART2) {
+        HAL_UART_Receive_IT(&SENSOR_UART_HANDLE, &rx_byte_sensor, 1);
+    } else if (huart->Instance == BLE_UART_INSTANCE) {
         (void)rb_push(&rb_ble, rx_byte_ble);
-        HAL_UART_Receive_IT(&huart2, &rx_byte_ble, 1);
+        HAL_UART_Receive_IT(&BLE_UART_HANDLE, &rx_byte_ble, 1);
     }
 }
 
 /** UARTエラー(オーバーラン等)からの自動復旧 */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == UART4) {
-        HAL_UART_Receive_IT(&huart4, &rx_byte_sensor, 1);
-    } else if (huart->Instance == USART2) {
-        HAL_UART_Receive_IT(&huart2, &rx_byte_ble, 1);
+    if (huart->Instance == SENSOR_UART_INSTANCE) {
+        HAL_UART_Receive_IT(&SENSOR_UART_HANDLE, &rx_byte_sensor, 1);
+    } else if (huart->Instance == BLE_UART_INSTANCE) {
+        HAL_UART_Receive_IT(&BLE_UART_HANDLE, &rx_byte_ble, 1);
     }
 }
 /* USER CODE END 4 */
