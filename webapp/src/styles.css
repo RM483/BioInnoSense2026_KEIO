@@ -373,6 +373,105 @@ body {
   background: var(--accent-soft);
 }
 
+/* ==== ホーム大改修: Apple Health大見出し + CareKitカード構成 ==== */
+.home-head {
+  width: 100%;
+  padding: 4px 0 2px;
+}
+.home-head-kicker {
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  color: var(--text-tertiary);
+  text-transform: none;
+}
+.home-head-title {
+  margin: 2px 0 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.8px;
+  color: var(--text-primary);
+}
+.hero-card {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  background: var(--card);
+  border-radius: 20px;
+  padding: 18px;
+  box-shadow: var(--shadow);
+  margin-top: 14px;
+}
+.hero-card .care-ring.hero-ring {
+  flex: none;
+  width: 118px;
+  height: 118px;
+}
+.hero-card .care-ring-rim {
+  width: 100px;
+  height: 100px;
+}
+.hero-card .care-ring-face {
+  width: 89px;
+  height: 89px;
+}
+.hero-words {
+  min-width: 0;
+  text-align: left;
+}
+.hero-words .dog-label {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.hero-words .phrase {
+  margin: 3px 0 0;
+  text-wrap: balance;
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.3px;
+  color: var(--text-primary);
+}
+.hero-trend {
+  margin-top: 3px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.hero-words .action {
+  margin: 8px 0 0;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}
+.hero-words .last-measured {
+  margin-top: 6px;
+  font-size: 11.5px;
+  color: var(--text-tertiary);
+}
+.dog-pager.center {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+}
+.trend-card {
+  width: 100%;
+  margin-top: 16px;
+  cursor: pointer;
+}
+.care-tasks {
+  margin-top: 22px;
+}
+.care-tasks .card-head .label.plain {
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+  text-transform: none;
+  color: var(--text-primary);
+}
+
 /* ==== きょうのケア — CareKit流デイリータスク (docs/22 §2) ====
  * header + タスク行 + 完了サークル。色に頼らず ✓ と文言で状態を伝える */
 .care-tasks {

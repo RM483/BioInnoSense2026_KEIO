@@ -120,8 +120,11 @@ export function HomeView(props: {
 
   return (
     <div className="view home-canvas full">
-      {/* ---- 固定ヘッダー: 挨拶 + 日付 (犬に依存しない) ---- */}
-      <div className="greeting">{greeting()} · {todayLabel()}</div>
+      {/* ---- Apple Health流の大見出し: 小さな挨拶 + 太い日付 ---- */}
+      <div className="home-head">
+        <div className="home-head-kicker">{greeting()}</div>
+        <h1 className="home-head-title">{todayLabel()}</h1>
+      </div>
 
       {/* ---- 犬ごとのページ(全体がスライド §2) ---- */}
       <div className="home-rail" ref={railRef} onScroll={onScroll}>
@@ -167,57 +170,58 @@ function DogHomePage(props: {
 
   return (
     <div className="home-page stack">
-      {/* ---- 見守りリング (主役 / docs/16 案B。写真があれば表示 §6) ---- */}
-      <button
-        className="care-ring"
-        style={{ background: `color-mix(in srgb, ${color} 7%, transparent)` }}
-        onClick={props.onStart}
-        aria-label={`${dog.name}の測定をはじめる`}
-      >
-        <span
-          className="care-ring-rim"
-          style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}
+      {/* ---- ヒーローカード: リング(左) × 状態の言葉(右) — CareKit様式 ---- */}
+      <section className="hero-card">
+        <button
+          className="care-ring hero-ring"
+          style={{ background: `color-mix(in srgb, ${color} 8%, transparent)` }}
+          onClick={props.onStart}
+          aria-label={`${dog.name}の測定をはじめる`}
         >
-          <span className="care-ring-face">
-            {dog.photo ? (
-              <img src={dog.photo} alt="" className="dog-photo" />
-            ) : (
-              <PawIcon size={62} />
-            )}
+          <span
+            className="care-ring-rim"
+            style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}
+          >
+            <span className="care-ring-face">
+              {dog.photo ? (
+                <img src={dog.photo} alt="" className="dog-photo" />
+              ) : (
+                <PawIcon size={44} />
+              )}
+            </span>
           </span>
-        </span>
-      </button>
+        </button>
+        <div className="hero-words">
+          <div className="dog-label">{dog.name}</div>
+          <h2 className="phrase">{levelPhrase[a.level]}</h2>
+          {trend && <div className="hero-trend">{trend}</div>}
+          <p className="action">{actionLabel(a)}</p>
+          {a.latest && (
+            <div className="last-measured">
+              最終測定 · {relativeTime(a.latest.startedAt)}
+            </div>
+          )}
+        </div>
+      </section>
 
-      {/* ---- どの犬か一目で分かる: 名前 + ドット + 1/N (§2) ---- */}
-      <div className="home-words">
-        <div className="dog-label">{dog.name}</div>
-        {props.pageCount > 1 && (
-          <div className="dog-pager"
-            aria-label={`${props.pageIndex + 1} / ${props.pageCount}頭目`}>
-            <span className="dots">
-              {Array.from({ length: props.pageCount }).map((_, i) => (
-                <span key={i}
-                  className={`dot ${i === props.pageIndex ? 'on' : ''}`} />
-              ))}
-            </span>
-            <span className="pager-count">
-              {props.pageIndex + 1} / {props.pageCount}
-            </span>
-          </div>
-        )}
-        <h2 className="phrase">{levelPhrase[a.level]}</h2>
-        {trend && <div className="trend-line-label center">{trend}</div>}
-        <p className="action">{actionLabel(a)}</p>
-        {a.latest && (
-          <div className="last-measured center">
-            最終測定 · {relativeTime(a.latest.startedAt)}
-          </div>
-        )}
-      </div>
+      {props.pageCount > 1 && (
+        <div className="dog-pager center"
+          aria-label={`${props.pageIndex + 1} / ${props.pageCount}頭目`}>
+          <span className="dots">
+            {Array.from({ length: props.pageCount }).map((_, i) => (
+              <span key={i}
+                className={`dot ${i === props.pageIndex ? 'on' : ''}`} />
+            ))}
+          </span>
+          <span className="pager-count">
+            {props.pageIndex + 1} / {props.pageCount}
+          </span>
+        </div>
+      )}
 
-      {/* ---- ここ7日のようす ---- */}
+      {/* ---- ここ7日のようす — CareKitチャートカード ---- */}
       {history.length >= 2 && (
-        <section className="trend-flat" onClick={props.onOpenHistory} role="button">
+        <section className="card trend-card" onClick={props.onOpenHistory} role="button">
           <div className="card-head">
             <span className="label plain">ここ7日のようす</span>
             <StatusChip level={a.level} />
