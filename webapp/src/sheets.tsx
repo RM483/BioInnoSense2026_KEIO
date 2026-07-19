@@ -95,7 +95,7 @@ export function FirstRunSheet(props: { onDone: (n: number) => void }) {
     <div className="overlay sheet-overlay">
       <div className="sheet" role="dialog" aria-label="はじめまして">
         <div className="sheet-handle" />
-        <h3 className="sheet-title center">はじめまして 🐾</h3>
+        <h3 className="sheet-title center">はじめまして</h3>
         <p className="sheet-body">
           現在、一緒に暮らしている犬は何頭ですか？
           <br />

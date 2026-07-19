@@ -805,6 +805,37 @@ button:disabled { cursor: default; opacity: 0.4; }
 
 .tabbar.top { display: none; }
 
+/* 押下の瞬間に反応する — フィードバックはpointer-downに置く (docs/22 §1) */
+.tab:active {
+  transform: scale(0.94);
+  transition: transform 0.1s ease-out;
+}
+
+/* ==== A11yの3信号を独立に扱う (docs/22 §1 / Apple Design §14) ====
+ * reduced-motionは既存の各所で処理済み。ここでは残り2つ:  */
+@media (prefers-reduced-transparency: reduce) {
+  /* 透明を嫌う設定 → ガラス(blurは.tabbar.bottomのみ)を不透明な面に */
+  .tabbar.bottom {
+    background: var(--bg);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+}
+@media (prefers-contrast: more) {
+  /* 高コントラスト → 面の分離をヘアラインでなく明確な境界で */
+  .card,
+  .sheet {
+    border: 1.5px solid var(--text-secondary);
+  }
+  .tabbar.bottom {
+    border-top: 1.5px solid var(--text-secondary);
+  }
+  .btn.primary {
+    outline: 1.5px solid var(--text-primary);
+    outline-offset: -1.5px;
+  }
+}
+
 /* iPad / Mac: ヘッダ右のセグメントに */
 @media (min-width: 720px) {
   .tabbar.bottom { display: none; }
@@ -1215,6 +1246,8 @@ button:disabled { cursor: default; opacity: 0.4; }
   align-items: flex-end;
   justify-content: center;
   background: rgba(0, 0, 0, 0.32);
+  /* 背景は暗転で「集中するタスク」を伝える (docs/22 §1 材質と階層) */
+  animation: overlayIn 0.25s ease;
 }
 .sheet {
   width: 100%;
@@ -1227,6 +1260,21 @@ button:disabled { cursor: default; opacity: 0.4; }
   flex-direction: column;
   gap: 14px;
   box-shadow: var(--shadow);
+  /* 下から入場 = 下部シートの空間的な出自 (docs/22 §1 空間的一貫性)。
+   * イージングは臨界減衰スプリング近似(オーバーシュートなし)。 */
+  animation: sheetIn 0.34s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes sheetIn {
+  from { transform: translateY(28px); opacity: 0.6; }
+  to { transform: translateY(0); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* 動きは消すが状況の変化は伝える — クロスフェードに置換 */
+  .sheet { animation: overlayIn 0.2s ease; }
 }
 .sheet-handle {
   width: 36px;
