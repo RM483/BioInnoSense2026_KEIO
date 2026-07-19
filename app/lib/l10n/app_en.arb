@@ -10,7 +10,13 @@
   "logout": "Log out",
   "home": "Home",
   "greeting": "Hello, {name}",
-  "@greeting": { "placeholders": { "name": { "type": "String" } } },
+  "@greeting": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "startMeasurement": "Start measurement",
   "latestMeasurement": "Latest measurement",
   "noMeasurementYet": "No measurements yet",
@@ -66,7 +72,13 @@
   "validatorEmail": "Enter a valid email address",
   "validatorPassword": "Use at least 8 characters",
   "dogAgeYears": "{age} yrs",
-  "@dogAgeYears": { "placeholders": { "age": { "type": "int" } } },
+  "@dogAgeYears": {
+    "placeholders": {
+      "age": {
+        "type": "int"
+      }
+    }
+  },
   "followSystem": "Follow system setting",
   "addDogPrompt": "Start by adding your dog's profile",
   "registerDog": "Add your dog",
@@ -78,7 +90,13 @@
   "measureHint": "Hold the mask gently and start measuring",
   "signalQuality": "Link quality",
   "lostFrames": "{count} lost",
-  "@lostFrames": { "placeholders": { "count": { "type": "int" } } },
+  "@lostFrames": {
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "goodMorning": "Good morning",
   "goodAfternoon": "Good afternoon",
   "goodEvening": "Good evening",
@@ -116,14 +134,38 @@
   "lastMeasured": "Last measured",
   "relJustNow": "just now",
   "relMinutesAgo": "{m}m ago",
-  "@relMinutesAgo": { "placeholders": { "m": { "type": "int" } } },
+  "@relMinutesAgo": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
   "relHoursAgo": "{h}h ago",
-  "@relHoursAgo": { "placeholders": { "h": { "type": "int" } } },
+  "@relHoursAgo": {
+    "placeholders": {
+      "h": {
+        "type": "int"
+      }
+    }
+  },
   "relDaysAgo": "{d}d ago",
-  "@relDaysAgo": { "placeholders": { "d": { "type": "int" } } },
+  "@relDaysAgo": {
+    "placeholders": {
+      "d": {
+        "type": "int"
+      }
+    }
+  },
   "recentTrend": "Recent trend",
   "measureTitleFor": "Measure {name}'s breath",
-  "@measureTitleFor": { "placeholders": { "name": { "type": "String" } } },
+  "@measureTitleFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "readyToMeasure": "Ready to measure",
   "connectFirstHint": "Connect the device to start measuring",
   "begin": "Begin",
@@ -139,7 +181,13 @@
   "levelSlightlyElevatedShort": "Slightly high",
   "levelElevatedShort": "High",
   "minutesShort": "{m} min",
-  "@minutesShort": { "placeholders": { "m": { "type": "int" } } },
+  "@minutesShort": {
+    "placeholders": {
+      "m": {
+        "type": "int"
+      }
+    }
+  },
   "demoModeDescription": "Running on demo data (no device)",
   "breathReady": "Waiting for a breath — hold the sensor near the muzzle",
   "retryingMeasure": "Measuring once more, gently",
@@ -151,7 +199,7 @@
   "remeasureAdvice": "Measuring again will make this record more reliable",
   "remeasureAction": "Measure again",
   "sensorHealthNote": "The sensor seems off today. Treat these values as a reference",
-  "errorTitleNoBreath": "Let\u2019s try the breath again",
+  "errorTitleNoBreath": "Let’s try the breath again",
   "errorNoBreath": "No breath was detected. Hold the sensor near the muzzle and wait calmly",
   "aboutDevice": "Device",
   "journalTitle": "Journal",
@@ -179,56 +227,154 @@
   "dayBeforeYesterday": "2 days ago",
   "cancel": "Cancel",
   "measureStartFor": "Measure {name}",
-  "@measureStartFor": { "placeholders": { "name": { "type": "String" } } },
+  "@measureStartFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "measureConfirmTitle": "Measuring {name}",
-  "@measureConfirmTitle": { "placeholders": { "name": { "type": "String" } } },
+  "@measureConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "measureConfirmStart": "Start measurement",
   "noWatchingDogs": "No dogs being watched right now",
   "noWatchingDogsBody": "Register your dog to record health status and measurements.",
-  "headCountTitle": "Nice to meet you 🐾",
+  "headCountTitle": "Nice to meet you",
   "headCountBody": "How many dogs live with you right now?\nYou can change this anytime in Settings.",
   "headCountN": "{n}",
-  "@headCountN": { "placeholders": { "n": { "type": "int" } } },
+  "@headCountN": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "watchingCountOf": "Watching {n} / {max}",
-  "@watchingCountOf": { "placeholders": { "n": { "type": "int" }, "max": { "type": "int" } } },
+  "@watchingCountOf": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      },
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "draftDogName": "Unfinished profile",
   "thisDog": "this dog",
   "nameRequiredHint": "Name (required)",
   "deleteProfileActionFor": "Delete {name}'s profile",
-  "@deleteProfileActionFor": { "placeholders": { "name": { "type": "String" } } },
+  "@deleteProfileActionFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "deleteConfirmTitle": "Delete {name}'s profile?",
-  "@deleteConfirmTitle": { "placeholders": { "name": { "type": "String" } } },
+  "@deleteConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "deleteConfirmBody": "The profile information will be deleted and cannot be restored.",
   "deleteConfirmAction": "Delete",
   "endWatchActionFor": "Stop watching {name}",
-  "@endWatchActionFor": { "placeholders": { "name": { "type": "String" } } },
+  "@endWatchActionFor": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "endWatchConfirmTitle": "Stop watching {name}?",
-  "@endWatchConfirmTitle": { "placeholders": { "name": { "type": "String" } } },
+  "@endWatchConfirmTitle": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "endWatchConfirmBody": "{name} will no longer appear on the Home screen or as a measurement target. Past measurements and journal entries are kept, and you can resume watching anytime.",
-  "@endWatchConfirmBody": { "placeholders": { "name": { "type": "String" } } },
+  "@endWatchConfirmBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "endWatchConfirmAction": "Stop watching",
   "archivedDogsHeading": "Dogs no longer watched",
   "resumeWatchAction": "Resume watching",
   "resumedToast": "Resumed watching {name}",
-  "@resumedToast": { "placeholders": { "name": { "type": "String" } } },
+  "@resumedToast": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "resumeLimitTitle": "Watching limit reached",
   "resumeLimitBody": "To resume watching {name}, change the number of dogs in Settings.",
-  "@resumeLimitBody": { "placeholders": { "name": { "type": "String" } } },
+  "@resumeLimitBody": {
+    "placeholders": {
+      "name": {
+        "type": "String"
+      }
+    }
+  },
   "limitReachedTitle": "Dog limit reached",
   "limitReachedBody": "You can watch up to {max} dogs with the current setting. To add another dog, change the limit in Settings.",
-  "@limitReachedBody": { "placeholders": { "max": { "type": "int" } } },
+  "@limitReachedBody": {
+    "placeholders": {
+      "max": {
+        "type": "int"
+      }
+    }
+  },
   "openSettings": "Open Settings",
   "dogSettingsTitle": "Dog registration",
   "watchDogsLabel": "Watched dogs",
   "decrease": "Decrease",
   "increase": "Increase",
   "limitIncreasedToast": "You can now watch up to {n} dogs",
-  "@limitIncreasedToast": { "placeholders": { "n": { "type": "int" } } },
+  "@limitIncreasedToast": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "reduceTitle": "Change your watched dogs",
   "reduceBody": "You are watching {n} dogs. Choose one dog to stop watching. No records will be deleted.",
-  "@reduceBody": { "placeholders": { "n": { "type": "int" } } },
+  "@reduceBody": {
+    "placeholders": {
+      "n": {
+        "type": "int"
+      }
+    }
+  },
   "reduceConfirm": "Stop watching and change",
   "takePhoto": "Take a photo",
   "choosePhoto": "Choose a photo",
-  "removePhoto": "Remove current photo"
+  "removePhoto": "Remove current photo",
+  "aboutThisData": "About this data",
+  "confidenceLabel": "Sensor confidence",
+  "provenanceMethod": "Method",
+  "provenanceBreathEvent": "Breath event (analyzed on device)",
+  "provenanceLabStream": "Continuous stream (lab mode)",
+  "provenanceEvidence": "Evidence",
+  "provenanceRhBacked": "Breath humidity rise confirmed",
+  "provenanceNote": "Note",
+  "provenanceRetried": "Automatically re-measured for quality",
+  "sensorHealthy": "Healthy",
+  "sensorUnusual": "Unusual today"
 }

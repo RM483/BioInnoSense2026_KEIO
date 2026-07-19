@@ -88,8 +88,96 @@ class HistoryDetailPage extends ConsumerWidget {
                 ],
               ),
             ),
+
+            // ---- データについて(来歴) ----
+            // 詳細画面は「技術情報の唯一の住所」(docs/21)。
+            // 測定の質・計測器の信頼度・取得方法をここで開示する —
+            // 「このデータがどう生まれたか」を提示できることが
+            // 医療系アプリの信頼の土台 (docs/22 §3 Medplum/Provenance)。
+            if (m.hasQuality) ...[
+              const SizedBox(height: 14),
+              AppCard(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(l10n.aboutThisData.toUpperCase(),
+                        style: AppText.overline
+                            .copyWith(color: p.textTertiary)),
+                    const SizedBox(height: 12),
+                    _ProvenanceRow(
+                        label: l10n.qualityLabel,
+                        value:
+                            '${_qualityWord(l10n, m.quality)} (${m.quality})',
+                        color: m.quality >= 60 ? null : p.warn),
+                    _ProvenanceRow(
+                        label: l10n.confidenceLabel,
+                        value:
+                            '${_confidenceWord(l10n, m.confidence)} (${m.confidence})',
+                        color: m.confidence >= 70 ? null : p.warn),
+                    _ProvenanceRow(
+                        label: l10n.provenanceMethod,
+                        value: m.mode == 'breath'
+                            ? l10n.provenanceBreathEvent
+                            : l10n.provenanceLabStream),
+                    if ((m.qualityFlags & 0x02) != 0)
+                      _ProvenanceRow(
+                          label: l10n.provenanceEvidence,
+                          value: l10n.provenanceRhBacked),
+                    if ((m.qualityFlags & 0x08) != 0)
+                      _ProvenanceRow(
+                          label: l10n.provenanceNote,
+                          value: l10n.provenanceRetried),
+                    if (m.deviceId.isNotEmpty)
+                      _ProvenanceRow(
+                          label: l10n.aboutDevice, value: m.deviceId),
+                  ],
+                ),
+              ),
+            ],
           ],
         ),
+      ),
+    );
+  }
+
+  static String _qualityWord(AppLocalizations l10n, int q) => q >= 80
+      ? l10n.qualityHigh
+      : q >= 60
+          ? l10n.qualityMedium
+          : l10n.qualityLow;
+
+  static String _confidenceWord(AppLocalizations l10n, int c) =>
+      c >= 70 ? l10n.sensorHealthy : l10n.sensorUnusual;
+}
+
+/// 来歴の1行 (ラベル: 値)。CareKitのkey-value様式に合わせる。
+class _ProvenanceRow extends StatelessWidget {
+  const _ProvenanceRow(
+      {required this.label, required this.value, this.color});
+  final String label;
+  final String value;
+  final Color? color;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 5),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 110,
+            child: Text(label,
+                style: AppText.caption.copyWith(color: p.textTertiary)),
+          ),
+          Expanded(
+            child: Text(value,
+                style: AppText.caption
+                    .copyWith(color: color ?? p.textPrimary)),
+          ),
+        ],
       ),
     );
   }
