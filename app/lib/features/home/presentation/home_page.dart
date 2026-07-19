@@ -25,6 +25,8 @@ import '../../insights/domain/health_assessment.dart';
 import '../../insights/presentation/assessment_style.dart';
 import '../../measurement/domain/measurement.dart';
 import '../../measurement/presentation/start_measure.dart';
+import '../../records/application/care_note_controller.dart';
+import '../../records/domain/care_note.dart';
 import '../../records/presentation/care_note_sheet.dart';
 import '../../settings/data/user_settings_repository.dart';
 
@@ -269,6 +271,10 @@ class _DogHomePage extends ConsumerWidget {
           const SizedBox(height: 24),
         ],
 
+        // ---- きょうのケア: Task→Outcomeの可視化 (CareKit様式, docs/22 §2) ----
+        _CareTasksSection(dog: dog, recent: recent),
+        const SizedBox(height: 24),
+
         // ---- 1段目: 大きな主CTA(名前入り §1,3) ----
         _PressableCta(
           label: l10n.measureStartFor(dog.name),
@@ -401,6 +407,171 @@ void _showHeadCountSheet(
 }
 
 /// 犬ページャ: ドット + 1/N (§2)。切替はページ全体のスワイプで行う。
+/// きょうのケア — CareKit流デイリータスク (docs/22 §2)。
+/// Task(やること)とOutcome(今日の結果)を分離し、完了サークルで示す。
+/// 未完了はタップ1回で記録シート(種別選択済み)/測定フローへ。
+class _CareTasksSection extends ConsumerWidget {
+  const _CareTasksSection({required this.dog, required this.recent});
+  final Dog dog;
+  final List<Measurement> recent;
+
+  static bool _isToday(DateTime d) {
+    final n = DateTime.now();
+    return d.year == n.year && d.month == n.month && d.day == n.day;
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final l10n = AppLocalizations.of(context)!;
+    final p = context.palette;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final notes = ref.watch(careNotesProvider(dog.id)).valueOrNull ??
+        const <CareNote>[];
+    final todayNotes = notes.where((n) => _isToday(n.at)).toList();
+
+    Measurement? measuredToday;
+    for (final m in recent) {
+      if (_isToday(m.startedAt)) {
+        measuredToday = m;
+        break;
+      }
+    }
+
+    CareNote? noteOf(CareNoteType t) {
+      for (final n in todayNotes) {
+        if (n.type == t) return n;
+      }
+      return null;
+    }
+
+    String timeOf(DateTime d) => DateFormat.Hm(locale).format(d);
+
+    final rows = <_CareTaskRowData>[
+      _CareTaskRowData(
+        label: l10n.breathTask,
+        detail: measuredToday != null
+            ? '${l10n.doneLabel} · ${timeOf(measuredToday.startedAt)}'
+            : l10n.oncePerDay,
+        done: measuredToday != null,
+        onTap: () => measuredToday != null
+            ? context.go(Routes.history)
+            : startMeasureFlowFor(context, ref, dog),
+      ),
+      for (final t in const [
+        CareNoteType.walk,
+        CareNoteType.appetite,
+        CareNoteType.medicine,
+      ])
+        () {
+          final n = noteOf(t);
+          return _CareTaskRowData(
+            label: careNoteTypeLabel(t, l10n),
+            detail: n != null
+                ? '${l10n.doneLabel} · ${timeOf(n.at)}'
+                    '${n.rating != null ? ' · ${careRatingLabel(n.rating!, l10n)}' : ''}'
+                : l10n.tapToRecord,
+            done: n != null,
+            onTap: () =>
+                showCareNoteSheet(context, ref, dog.id, initialType: t),
+          );
+        }(),
+    ];
+    final doneCount = rows.where((r) => r.done).length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: Text(l10n.todaysCare.toUpperCase(),
+                  style: AppText.overline.copyWith(color: p.textTertiary)),
+            ),
+            Text('$doneCount / ${rows.length}',
+                style: AppText.caption.copyWith(color: p.textTertiary)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        for (final r in rows) ...[
+          _CareTaskRow(data: r),
+          const SizedBox(height: 8),
+        ],
+      ],
+    );
+  }
+}
+
+class _CareTaskRowData {
+  const _CareTaskRowData({
+    required this.label,
+    required this.detail,
+    required this.done,
+    required this.onTap,
+  });
+  final String label;
+  final String detail;
+  final bool done;
+  final VoidCallback onTap;
+}
+
+class _CareTaskRow extends StatelessWidget {
+  const _CareTaskRow({required this.data});
+  final _CareTaskRowData data;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final d = data;
+    return Semantics(
+      button: true,
+      label: '${d.label} — ${d.detail}',
+      child: ExcludeSemantics(
+        child: AppCard(
+          padding:
+              const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          onTap: d.onTap,
+          child: Row(
+            children: [
+              // 完了サークル: 色に頼らず✓で状態を伝える (docs/22)
+              Container(
+                width: 26,
+                height: 26,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: d.done ? p.success : Colors.transparent,
+                  border: d.done
+                      ? null
+                      : Border.all(color: p.textTertiary, width: 1.6),
+                ),
+                child: d.done
+                    ? Icon(Icons.check, size: 16, color: p.onAccent)
+                    : null,
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(d.label,
+                        style: AppText.bodyMedium.copyWith(
+                            color: d.done
+                                ? p.textSecondary
+                                : p.textPrimary)),
+                    const SizedBox(height: 2),
+                    Text(d.detail,
+                        style: AppText.caption
+                            .copyWith(color: p.textTertiary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _DogPager extends StatelessWidget {
   const _DogPager({required this.count, required this.index});
 

@@ -376,5 +376,10 @@
   "provenanceNote": "補足",
   "provenanceRetried": "品質確保のため自動で測り直しました",
   "sensorHealthy": "正常",
-  "sensorUnusual": "いつもと違う"
+  "sensorUnusual": "いつもと違う",
+  "todaysCare": "きょうのケア",
+  "tapToRecord": "タップで記録",
+  "breathTask": "呼気の測定",
+  "oncePerDay": "1日1回 · 3分ほど",
+  "doneLabel": "済み"
 }

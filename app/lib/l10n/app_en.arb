@@ -376,5 +376,10 @@
   "provenanceNote": "Note",
   "provenanceRetried": "Automatically re-measured for quality",
   "sensorHealthy": "Healthy",
-  "sensorUnusual": "Unusual today"
+  "sensorUnusual": "Unusual today",
+  "todaysCare": "Today's care",
+  "tapToRecord": "Tap to record",
+  "breathTask": "Breath measurement",
+  "oncePerDay": "Once a day · about 3 min",
+  "doneLabel": "Done"
 }

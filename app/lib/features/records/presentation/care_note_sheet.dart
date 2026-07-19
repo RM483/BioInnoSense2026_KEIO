@@ -35,26 +35,29 @@ String careRatingLabel(CareRating r, AppLocalizations l10n) => switch (r) {
     };
 
 /// 日誌入力シートを開く。保存されたら true を返す。
+/// [initialType] はホームのケアタスクから開いた場合の初期種別 (docs/22)。
 Future<bool?> showCareNoteSheet(
-    BuildContext context, WidgetRef ref, String dogId) {
+    BuildContext context, WidgetRef ref, String dogId,
+    {CareNoteType? initialType}) {
   return showModalBottomSheet<bool>(
     context: context,
     isScrollControlled: true,
     backgroundColor: Colors.transparent,
-    builder: (_) => _CareNoteSheet(dogId: dogId),
+    builder: (_) => _CareNoteSheet(dogId: dogId, initialType: initialType),
   );
 }
 
 class _CareNoteSheet extends ConsumerStatefulWidget {
-  const _CareNoteSheet({required this.dogId});
+  const _CareNoteSheet({required this.dogId, this.initialType});
   final String dogId;
+  final CareNoteType? initialType;
 
   @override
   ConsumerState<_CareNoteSheet> createState() => _CareNoteSheetState();
 }
 
 class _CareNoteSheetState extends ConsumerState<_CareNoteSheet> {
-  CareNoteType _type = CareNoteType.walk;
+  late CareNoteType _type = widget.initialType ?? CareNoteType.walk;
   CareRating _rating = CareRating.normal;
   final _memoCtrl = TextEditingController();
   bool _saving = false;
