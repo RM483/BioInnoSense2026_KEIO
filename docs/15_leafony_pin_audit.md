@@ -138,3 +138,14 @@ AC02仕様書 2.5節 + サンプルコードより:
   電源制御はDGS2の's'コマンドのみ。
 - AC02の実装位置は未確認(A1/A2取り合いの可能性) — 写真待ち。
 - TBGLib(leafony公式のBlue Geckoライブラリ)の存在によりAC02=BGAPI説を再確認。
+
+### 決定 (リワーク方針確定)
+
+- **リワーク内容**: DGS2リーフの TXD→D9(PA10=USART1_RX)、RXD→D8(PA9=USART1_TX)
+  へ配線変更(A1/A2のパターンはカットしAC02専用に返す)。
+- **FW最終形(実装済み)**: センサ=USART1(9600 8N1・スワップ不要)、
+  AC02=UART4(BGAPIトランスポート・notify 0x000C・WAKEUP PB12)。
+- リワーク前のDGS2単体検証はビルドフラグ `HYDROPAW_SENSOR_ON_UART4` で
+  旧構成(UART4+SWAP)に切替可能。
+- 残る実機確認: BGAPI class/method ID のTBGLib突合(bgapi.hに集約済み)、
+  AC02実機でのGATT/notify確認、DGS2実応答での閾値較正(docs/13)。
