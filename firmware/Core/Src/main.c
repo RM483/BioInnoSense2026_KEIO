@@ -181,7 +181,15 @@ static void ble_uart_tx(const uint8_t *data, size_t len)
 
 static void debug_uart_tx(const uint8_t *data, size_t len)
 {
+#ifdef HYDROPAW_SENSOR_ON_UART4
+    /* リワーク前検証モード: USART2はBLEが使うためログはLPUART1(要AX02B) */
     HAL_UART_Transmit(&hlpuart1, (uint8_t *)data, (uint16_t)len, 20);
+#else
+    /* 最終形: USART2(D0/D1)は空いたのでログをここへ —
+     * AZ01 USBリーフのシリアルモニタ(115200bps)で直接読める。
+     * I2C線(PC0/PC1)との衝突も解消 (docs/15 B3対応)。 */
+    HAL_UART_Transmit(&huart2, (uint8_t *)data, (uint16_t)len, 20);
+#endif
 }
 
 #ifndef HYDROPAW_LOG_DISABLE
