@@ -332,8 +332,10 @@ export function NoteSheet(props: {
     memo: string
   }) => void
   onClose: () => void
+  /** ホームのケアタスクから開いた場合の初期種別 (docs/22 CareKit適用) */
+  initialType?: CareNote['type']
 }) {
-  const [type, setType] = useState<CareNote['type']>('walk')
+  const [type, setType] = useState<CareNote['type']>(props.initialType ?? 'walk')
   const [rating, setRating] = useState<NonNullable<CareNote['rating']>>('normal')
   const [memo, setMemo] = useState('')
 

@@ -69,7 +69,7 @@ function routeFromHash(): Route {
 /** モーダル(シート)の排他状態 */
 type Sheet =
   | { kind: 'none' }
-  | { kind: 'note' }
+  | { kind: 'note'; initialType?: CareNote['type'] }
   | { kind: 'measureConfirm'; dog: Dog }
   | { kind: 'deleteDog'; dog: Dog }
   | { kind: 'endWatch'; dog: Dog }
@@ -435,6 +435,14 @@ export default function App() {
           historyFor={(id) =>
             history.filter((h) => !h.dogId || h.dogId === id)
           }
+          notesFor={(id) => {
+            const today = new Date().toDateString()
+            return notes.filter(
+              (n) =>
+                n.dogId === id &&
+                new Date(n.at).toDateString() === today,
+            )
+          }}
           conn={conn}
           busy={busy}
           onIndex={(i) => {
@@ -444,6 +452,7 @@ export default function App() {
           onStart={(d) => setSheet({ kind: 'measureConfirm', dog: d })}
           onOpenHistory={() => go('history')}
           onAddNote={() => setSheet({ kind: 'note' })}
+          onQuickNote={(t) => setSheet({ kind: 'note', initialType: t })}
           onRegisterDog={() => go('dogs')}
         />
       )}
@@ -520,7 +529,11 @@ export default function App() {
 
       {/* ---- シート群 ---- */}
       {sheet.kind === 'note' && dog && (
-        <NoteSheet onSave={addNote} onClose={() => setSheet({ kind: 'none' })} />
+        <NoteSheet
+          initialType={sheet.initialType}
+          onSave={addNote}
+          onClose={() => setSheet({ kind: 'none' })}
+        />
       )}
       {sheet.kind === 'measureConfirm' && (
         <MeasureConfirmSheet

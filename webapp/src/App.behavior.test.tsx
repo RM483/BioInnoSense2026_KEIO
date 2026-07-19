@@ -128,7 +128,11 @@ describe('HydroPaw Web SPA (MockProvider, IA v2.1)', () => {
     // 記録を1件つける(ポチ)
     fireEvent.click(screen.getByText('きょうの記録'))
     await tick(10)
-    fireEvent.click(screen.getByText('食欲'))
+    // ホームの「きょうのケア」行にも「食欲」があるため、シート内のチップを特定する
+    const sheetChip = Array.from(
+      document.querySelectorAll('.sheet .select-chip'),
+    ).find((el) => el.textContent === '食欲')!
+    fireEvent.click(sheetChip)
     fireEvent.click(screen.getByText('気になる'))
     fireEvent.change(document.querySelector('.memo-input')!, {
       target: { value: '朝ごはんを半分残した' },

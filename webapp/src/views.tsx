@@ -33,6 +33,11 @@ import {
   type HealthLevel,
 } from './lib/assessment'
 import type { Dog } from './lib/dogs'
+import {
+  type CareNote,
+  noteTypeLabel,
+  ratingLabel,
+} from './lib/careNotes'
 
 /* ================= ホーム ================= */
 
@@ -48,12 +53,14 @@ export function HomeView(props: {
   dogs: Dog[] // 見守り中の犬のみ
   index: number
   historyFor: (dogId: string) => SessionSummary[]
+  notesFor: (dogId: string) => CareNote[] // きょうの日誌 (ケアタスク用)
   conn: ConnectionStatus
   busy: boolean
   onIndex: (i: number) => void
   onStart: (dog: Dog) => void
   onOpenHistory: () => void
   onAddNote: () => void
+  onQuickNote: (type: CareNote['type']) => void
   onRegisterDog: () => void
 }) {
   const railRef = useRef<HTMLDivElement>(null)
@@ -123,6 +130,7 @@ export function HomeView(props: {
             key={dog.id}
             dog={dog}
             history={props.historyFor(dog.id)}
+            todayNotes={props.notesFor(dog.id)}
             pageIndex={i}
             pageCount={props.dogs.length}
             conn={props.conn}
@@ -130,6 +138,7 @@ export function HomeView(props: {
             onStart={() => props.onStart(dog)}
             onOpenHistory={props.onOpenHistory}
             onAddNote={props.onAddNote}
+            onQuickNote={props.onQuickNote}
           />
         ))}
       </div>
@@ -141,6 +150,7 @@ export function HomeView(props: {
 function DogHomePage(props: {
   dog: Dog
   history: SessionSummary[]
+  todayNotes: CareNote[]
   pageIndex: number
   pageCount: number
   conn: ConnectionStatus
@@ -148,6 +158,7 @@ function DogHomePage(props: {
   onStart: () => void
   onOpenHistory: () => void
   onAddNote: () => void
+  onQuickNote: (type: CareNote['type']) => void
 }) {
   const { dog, history } = props
   const a = assess(history)
@@ -216,6 +227,17 @@ function DogHomePage(props: {
         </section>
       )}
 
+      {/* ---- きょうのケア: Task→Outcome を1日の単位で可視化 ----
+       * CareKitのデイリータスクカード様式 (docs/22 §2)。
+       * 完了サークルが「済んだ/まだ」を色に頼らず伝える。 */}
+      <CareTasks
+        history={history}
+        todayNotes={props.todayNotes}
+        onStart={props.onStart}
+        onOpenHistory={props.onOpenHistory}
+        onQuickNote={props.onQuickNote}
+      />
+
       {/* ---- 1段目: 大きな主CTA (§1) / 2段目: 副導線 ---- */}
       <div className="controls home-cta">
         <button
@@ -242,6 +264,96 @@ function DogHomePage(props: {
     </div>
   )
 }
+
+/** きょうのケア — CareKit流デイリータスク (docs/22 §2)。
+ *  Task(やること) と Outcome(今日の結果) を分離して考え、
+ *  Outcomeの有無を完了サークルで示す。未完了もタップ1回で記録へ。 */
+function CareTasks(props: {
+  history: SessionSummary[]
+  todayNotes: CareNote[]
+  onStart: () => void
+  onOpenHistory: () => void
+  onQuickNote: (type: CareNote['type']) => void
+}) {
+  const measuredToday = props.history.some((h) =>
+    isToday(new Date(h.startedAt)),
+  )
+  const lastToday = props.history.find((h) => isToday(new Date(h.startedAt)))
+  const noteOf = (t: CareNote['type']) =>
+    props.todayNotes.find((n) => n.type === t)
+
+  const rows: {
+    key: string
+    label: string
+    detail: string
+    done: boolean
+    onTap: () => void
+  }[] = [
+    {
+      key: 'measure',
+      label: '呼気の測定',
+      detail: measuredToday
+        ? `済み · ${timeOf(lastToday!.startedAt)}`
+        : '1日1回 · 3分ほど',
+      done: measuredToday,
+      onTap: measuredToday ? props.onOpenHistory : props.onStart,
+    },
+    ...(['walk', 'appetite', 'medicine'] as const).map((t) => {
+      const n = noteOf(t)
+      return {
+        key: t,
+        label: noteTypeLabel(t),
+        detail: n
+          ? `済み · ${timeOf(n.at)}${n.rating ? ` · ${ratingLabel(n.rating)}` : ''}`
+          : 'タップで記録',
+        done: !!n,
+        onTap: () => props.onQuickNote(t),
+      }
+    }),
+  ]
+
+  return (
+    <section className="care-tasks">
+      <div className="card-head">
+        <span className="label plain">きょうのケア</span>
+        <span className="aside">
+          {rows.filter((r) => r.done).length} / {rows.length}
+        </span>
+      </div>
+      <div className="task-list">
+        {rows.map((r) => (
+          <button
+            key={r.key}
+            className={`task-row ${r.done ? 'done' : ''}`}
+            onClick={r.onTap}
+            aria-label={`${r.label} — ${r.detail}`}
+          >
+            <span className="task-check" aria-hidden="true">
+              {r.done && <CheckIcon size={15} />}
+            </span>
+            <span className="task-texts">
+              <span className="task-label">{r.label}</span>
+              <span className="task-detail">{r.detail}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+const isToday = (d: Date): boolean => {
+  const now = new Date()
+  return (
+    d.getFullYear() === now.getFullYear() &&
+    d.getMonth() === now.getMonth() &&
+    d.getDate() === now.getDate()
+  )
+}
+
+const timeOf = (iso: string): string =>
+  new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' })
+    .format(new Date(iso))
 
 function greeting(): string {
   const h = new Date().getHours()
