@@ -402,42 +402,48 @@ body {
 .task-row:active {
   transform: scale(0.985);
 }
-.task-row.done {
-  background: color-mix(in srgb, var(--success) 6%, var(--card));
-  border-color: color-mix(in srgb, var(--success) 25%, var(--hairline));
-}
+/* CareKit本家のカード様式: 左=太いタイトル+詳細、右=大きな完了ボタン(ティント色) */
 .task-check {
   flex: none;
-  width: 26px;
-  height: 26px;
+  order: 3;
+  margin-left: auto;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  border: 1.6px solid var(--text-tertiary);
+  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #fff;
+  color: var(--on-accent);
+  transition: background 0.2s ease, transform 0.15s ease;
 }
 .task-row.done .task-check {
-  background: var(--success);
-  border-color: var(--success);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.task-row:active .task-check {
+  transform: scale(0.9);
 }
 .task-texts {
+  order: 1;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 3px;
   min-width: 0;
 }
 .task-label {
-  font-size: 14.5px;
-  font-weight: 600;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
   color: var(--text-primary);
 }
-.task-row.done .task-label {
+.task-detail {
+  font-size: 12.5px;
   color: var(--text-secondary);
 }
-.task-detail {
-  font-size: 12px;
-  color: var(--text-tertiary);
+.task-row.done .task-detail {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* ここ7日のようす — 平置き(カードにしない) */
