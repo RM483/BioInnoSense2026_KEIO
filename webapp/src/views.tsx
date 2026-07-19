@@ -170,37 +170,49 @@ function DogHomePage(props: {
 
   return (
     <div className="home-page stack">
-      {/* ---- ヒーローカード: リング(左) × 状態の言葉(右) — CareKit様式 ---- */}
-      <section className="hero-card">
-        <button
-          className="care-ring hero-ring"
-          style={{ background: `color-mix(in srgb, ${color} 8%, transparent)` }}
-          onClick={props.onStart}
-          aria-label={`${dog.name}の測定をはじめる`}
-        >
-          <span
-            className="care-ring-rim"
-            style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}
-          >
-            <span className="care-ring-face">
-              {dog.photo ? (
-                <img src={dog.photo} alt="" className="dog-photo" />
-              ) : (
-                <PawIcon size={44} />
-              )}
-            </span>
-          </span>
-        </button>
-        <div className="hero-words">
-          <div className="dog-label">{dog.name}</div>
-          <h2 className="phrase">{levelPhrase[a.level]}</h2>
-          {trend && <div className="hero-trend">{trend}</div>}
-          <p className="action">{actionLabel(a)}</p>
+      {/* ---- ヒーローパネル: 深いMizuhaティール — ブランドの顔 ----
+       * 濃色パネル×紙色カャンバス(Oura/Fitness+の構成)。状態はリングの
+       * 縁色とチップで、行動はパネル内の白CTAで完結する。 */}
+      <section className="hero-panel">
+        <div className="hero-top">
+          <span className="hero-chip">{dog.name}</span>
           {a.latest && (
-            <div className="last-measured">
+            <span className="hero-last">
               最終測定 · {relativeTime(a.latest.startedAt)}
-            </div>
+            </span>
           )}
+        </div>
+        <h2 className="hero-phrase">{levelPhrase[a.level]}</h2>
+        {trend && <div className="hero-sub">{trend}</div>}
+        <p className="hero-action">{actionLabel(a)}</p>
+        <div className="hero-row">
+          <button
+            className="care-ring hero-ring"
+            onClick={props.onStart}
+            aria-label={`${dog.name}の測定をはじめる`}
+          >
+            <span
+              className="care-ring-rim"
+              style={{ borderColor: `color-mix(in srgb, ${color} 80%, white)` }}
+            >
+              <span className="care-ring-face">
+                {dog.photo ? (
+                  <img src={dog.photo} alt="" className="dog-photo" />
+                ) : (
+                  <PawIcon size={34} />
+                )}
+              </span>
+            </span>
+          </button>
+          <button
+            className="hero-cta"
+            onClick={props.onStart}
+            disabled={props.busy || props.conn === 'connecting'}
+          >
+            {props.conn === 'connecting'
+              ? '接続しています…'
+              : `${dog.name}の測定をはじめる`}
+          </button>
         </div>
       </section>
 
@@ -242,17 +254,8 @@ function DogHomePage(props: {
         onQuickNote={props.onQuickNote}
       />
 
-      {/* ---- 1段目: 大きな主CTA (§1) / 2段目: 副導線 ---- */}
+      {/* ---- 副導線 (主CTAはヒーローパネル内へ移動) ---- */}
       <div className="controls home-cta">
-        <button
-          className="btn primary main-cta"
-          onClick={props.onStart}
-          disabled={props.busy || props.conn === 'connecting'}
-        >
-          {props.conn === 'connecting'
-            ? '接続しています…'
-            : `${dog.name}の測定をはじめる`}
-        </button>
         <div className="quiet-links">
           <button className="quiet-link" onClick={props.onOpenHistory}>
             <BookIcon size={17} />

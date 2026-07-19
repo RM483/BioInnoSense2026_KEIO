@@ -76,7 +76,7 @@ describe('HydroPaw Web SPA (MockProvider, IA v2.1)', () => {
     expect(document.querySelector('.overlay')).toBeNull()
     expect(
       ['今日は安定しています', '少し高めです。様子を見ましょう', '高めの値が続いています'],
-    ).toContain(document.querySelector('.hero-words .phrase')!.textContent)
+    ).toContain(document.querySelector('.hero-phrase')!.textContent)
 
     // 記録はポチのデータとして保存されている (§3,15)
     const saved = JSON.parse(localStorage.getItem('hydropaw.history.v1')!)
