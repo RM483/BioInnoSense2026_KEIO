@@ -223,5 +223,11 @@ void USART2_IRQHandler(void)
 }
 
 /* USER CODE BEGIN 1 */
+/* DGS2用UART4 (USER CODE管理 — main.c sensor_uart4_init 参照) */
+extern UART_HandleTypeDef huart4;
 
+void UART4_IRQHandler(void)
+{
+  HAL_UART_IRQHandler(&huart4);
+}
 /* USER CODE END 1 */

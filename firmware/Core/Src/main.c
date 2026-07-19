@@ -66,6 +66,12 @@ static uint8_t       rx_byte_ble;
 static dgs2_t     g_sensor;
 static ble_link_t g_link;
 static sm_t       g_sm;
+
+/* DGS2用UART4 (専用基板の実配線に合わせてUSER CODEで管理 — docs/15追補)
+ * 基板: DGS2 TXD→A1(PA0)/RXD→A2(PA1)。PA0=UART4_TX/PA1=UART4_RXのため
+ * 電気的に逆向きだが、CR2.SWAP(TX/RXピンスワップ)で救済する。
+ * CubeMX管理外の理由: SWAP込みの特殊構成を再生成で失わないため。 */
+UART_HandleTypeDef huart4;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,7 +94,40 @@ static void debug_uart_tx(const uint8_t *data, size_t len);
 /* ---- 注入コールバック (App層はHAL非依存のまま保つ) ---- */
 static void sensor_uart_tx(const uint8_t *data, size_t len)
 {
-    HAL_UART_Transmit(&huart1, (uint8_t *)data, (uint16_t)len, 100);
+    HAL_UART_Transmit(&huart4, (uint8_t *)data, (uint16_t)len, 100);
+}
+
+/** DGS2用UART4の手動初期化 (9600 8N1 + TX/RXスワップ)。
+ *  PA0/PA1 = AF8。スワップによりPA0=RX(←DGS2 TXD), PA1=TX(→DGS2 RXD)。 */
+static void sensor_uart4_init(void)
+{
+    __HAL_RCC_UART4_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+
+    GPIO_InitTypeDef gpio = {0};
+    gpio.Pin = GPIO_PIN_0 | GPIO_PIN_1;
+    gpio.Mode = GPIO_MODE_AF_PP;
+    gpio.Pull = GPIO_NOPULL;
+    gpio.Speed = GPIO_SPEED_FREQ_LOW;
+    gpio.Alternate = GPIO_AF8_UART4;
+    HAL_GPIO_Init(GPIOA, &gpio);
+
+    huart4.Instance = UART4;
+    huart4.Init.BaudRate = 9600;               /* DGS2データシート: 9600 8N1 */
+    huart4.Init.WordLength = UART_WORDLENGTH_8B;
+    huart4.Init.StopBits = UART_STOPBITS_1;
+    huart4.Init.Parity = UART_PARITY_NONE;
+    huart4.Init.Mode = UART_MODE_TX_RX;
+    huart4.Init.HwFlowCtl = UART_HWCONTROL_NONE;
+    huart4.Init.OverSampling = UART_OVERSAMPLING_16;
+    huart4.AdvancedInit.AdvFeatureInit = UART_ADVFEATURE_SWAP_INIT;
+    huart4.AdvancedInit.Swap = UART_ADVFEATURE_SWAP_ENABLE;
+    if (HAL_UART_Init(&huart4) != HAL_OK) {
+        Error_Handler();
+    }
+
+    HAL_NVIC_SetPriority(UART4_IRQn, 1, 0);
+    HAL_NVIC_EnableIRQ(UART4_IRQn);
 }
 
 static void ble_uart_tx(const uint8_t *data, size_t len)
@@ -196,8 +235,11 @@ int main(void)
   ble_link_init(&g_link, ble_uart_tx);
   sm_init(&g_sm, &g_sensor, &g_link, power_read_battery_mv, HAL_GetTick());
 
+  /* DGS2は専用基板の実配線(A1/A2=UART4+SWAP)に合わせて初期化 */
+  sensor_uart4_init();
+
   /* 1バイト割込み受信を開始 (RxCpltCallbackで再アーム) */
-  HAL_UART_Receive_IT(&huart1, &rx_byte_sensor, 1);
+  HAL_UART_Receive_IT(&huart4, &rx_byte_sensor, 1);
   HAL_UART_Receive_IT(&huart2, &rx_byte_ble, 1);
 
   sm_state_t logged_state = g_sm.state;
@@ -544,9 +586,9 @@ static void MX_GPIO_Init(void)
   */
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART1) {
+    if (huart->Instance == UART4) {
         (void)rb_push(&rb_sensor, rx_byte_sensor);
-        HAL_UART_Receive_IT(&huart1, &rx_byte_sensor, 1);
+        HAL_UART_Receive_IT(&huart4, &rx_byte_sensor, 1);
     } else if (huart->Instance == USART2) {
         (void)rb_push(&rb_ble, rx_byte_ble);
         HAL_UART_Receive_IT(&huart2, &rx_byte_ble, 1);
@@ -556,8 +598,8 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 /** UARTエラー(オーバーラン等)からの自動復旧 */
 void HAL_UART_ErrorCallback(UART_HandleTypeDef *huart)
 {
-    if (huart->Instance == USART1) {
-        HAL_UART_Receive_IT(&huart1, &rx_byte_sensor, 1);
+    if (huart->Instance == UART4) {
+        HAL_UART_Receive_IT(&huart4, &rx_byte_sensor, 1);
     } else if (huart->Instance == USART2) {
         HAL_UART_Receive_IT(&huart2, &rx_byte_ble, 1);
     }

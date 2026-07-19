@@ -109,3 +109,32 @@ AC02仕様書 2.5節 + サンプルコードより:
 - Leafony実ピン: バス⇔ポート対応は**公式確定**。残るのはC1〜C5(外部配線)と
   D1〜D3(物理)のみ。
 - 分圧比: 「外部配線情報が不足」へ再分類(実機のみの問題ではない)。
+
+---
+
+## 追補 (専用基板の実配線確定 — KiCad回路図より)
+
+- 専用リーフ: DGS2 TXD→A1 / RXD→A2、V+=3.3V直結(電源ゲートなし)。
+- 公式バリアント定義(leafony/platformio-LEAFONY_AP03)で **A1=PA0, A2=PA1** を確定。
+  PA0=UART4_TX/PA1=UART4_RXのため配線は電気的に逆 → **CR2.SWAPで救済**。
+- FW対応: UART4をUSER CODEで手動初期化(9600 8N1+SWAP+NVIC)。CubeMX管理外に
+  した理由: SWAP込み構成を再生成で失わないため(main.c sensor_uart4_init)。
+- USART1(PA9/PA10)はセンサから解放し予備へ。SENSOR_PWR(PA8)は実配線なし —
+  電源制御はDGS2の's'コマンドのみ(結線されれば従来通り機能する)。
+- AC02の実装位置は未確認(A1/A2取り合いの可能性) — 写真待ち。
+- TBGLib(leafony公式のBlue Geckoライブラリ)の存在によりAC02=BGAPI説を再確認。
+
+
+---
+
+## 追補 (専用基板の実配線確定 — KiCad回路図より)
+
+- 専用リーフ: DGS2 TXD→A1 / RXD→A2、V+=3.3V直結(電源ゲートなし)。
+- 公式バリアント定義(leafony/platformio-LEAFONY_AP03)で A1=PA0, A2=PA1 を確定。
+  PA0=UART4_TX/PA1=UART4_RXのため配線は電気的に逆 → CR2.SWAPで救済。
+- FW対応: UART4をUSER CODEで手動初期化(9600 8N1+SWAP+NVIC)。CubeMX管理外に
+  した理由: SWAP込み構成を再生成で失わないため(main.c sensor_uart4_init)。
+- USART1(PA9/PA10)はセンサから解放し予備へ。SENSOR_PWR(PA8)は実配線なし —
+  電源制御はDGS2の's'コマンドのみ。
+- AC02の実装位置は未確認(A1/A2取り合いの可能性) — 写真待ち。
+- TBGLib(leafony公式のBlue Geckoライブラリ)の存在によりAC02=BGAPI説を再確認。
