@@ -2,25 +2,46 @@
  * 思想: グループ化された背景 + 白カード / 数値が主役 / 階層の明確な
  * タイポグラフィ / 控えめで滑らかなアニメーション */
 :root {
-  /* ==== Mizuha Deep — HydroPawの署名テーマ(常にダーク, Oura流) ====
-   * 深い水底の緑を全画面のカャンバスに。カードはガラス質の水面、
-   * アクセントは明るいミント。赤い「エラー色」は存在しない。 */
-  --bg: #0b1f1c;
-  --card: #14332e;
-  --card-elevated: #1b423b;
-  --hairline: rgba(255, 255, 255, 0.09);
-  --text-primary: #f2f7f5;
-  --text-secondary: rgba(232, 244, 240, 0.68);
-  --text-tertiary: rgba(232, 244, 240, 0.42);
-  --accent: #4fb8a5;
-  --accent-soft: rgba(79, 184, 165, 0.16);
-  --on-accent: #06201c;
-  --warn: #e8a94e;
-  --warn-soft: rgba(232, 169, 78, 0.14);
-  --danger: #e9736c;
-  --success: #55d6a0;
-  --success-soft: rgba(85, 214, 160, 0.14);
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+  /* HydroPaw Mizuha(水羽)パレット — docs/17 §3。
+   * 紙色の背景 + 深い水緑のブランド色 + 珊瑚/琥珀/緑の状態色。
+   * 赤い「エラー色」は存在しない。 */
+  --bg: #f6f5f2;
+  --card: #ffffff;
+  --card-elevated: #f0efea;
+  --hairline: rgba(60, 60, 67, 0.12);
+  --text-primary: #1c1c1e;
+  --text-secondary: rgba(60, 60, 67, 0.6);
+  --text-tertiary: rgba(60, 60, 67, 0.35);
+  --accent: #12766b;
+  --accent-soft: rgba(18, 118, 107, 0.1);
+  --on-accent: #ffffff; /* accent面上の文字色 (docs/17 A21) */
+  --warn: #c8811f;
+  --warn-soft: rgba(200, 129, 31, 0.1);
+  --danger: #ce544c;
+  --success: #2f9e6e;
+  --success-soft: rgba(47, 158, 110, 0.1);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 2px 12px rgba(0, 0, 0, 0.03);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #000000;
+    --card: #1c1c1e;
+    --card-elevated: #2c2c2e;
+    --hairline: rgba(84, 84, 88, 0.5);
+    --text-primary: #f2f2f7;
+    --text-secondary: rgba(235, 235, 245, 0.6);
+    --text-tertiary: rgba(235, 235, 245, 0.3);
+    --accent: #4fb8a5;
+    --accent-soft: rgba(79, 184, 165, 0.16);
+    --on-accent: #0e0f12; /* 明るいティール上は黒 — コントラスト確保 (A21) */
+    --warn: #e8a94e;
+    --warn-soft: rgba(232, 169, 78, 0.14);
+    --danger: #e9736c;
+    --success: #46c68a;
+    --success-soft: rgba(70, 198, 138, 0.14);
+    --shadow: none;
+  }
 }
 
 * {
@@ -155,7 +176,9 @@ body {
   transition: transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.card { border: 1px solid rgba(255, 255, 255, 0.07); }
+@media (prefers-color-scheme: dark) {
+  .card { border: 1px solid var(--hairline); }
+}
 
 /* カード見出し行 (Health風: 色付きラベル + 右端に補足) */
 .card-head {
@@ -456,10 +479,9 @@ body {
   padding: 22px 22px 20px;
   color: #fff;
   background:
-    radial-gradient(130% 100% at 85% -10%, rgba(79, 184, 165, 0.55), transparent 62%),
-    linear-gradient(160deg, #185448, #113f38 55%, #0d322c);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.35);
+    radial-gradient(120% 90% at 85% -10%, rgba(79, 184, 165, 0.5), transparent 60%),
+    linear-gradient(160deg, #11463f, #0e3b36 55%, #0b2f2b);
+  box-shadow: 0 12px 30px rgba(14, 59, 54, 0.22);
   margin-top: 14px;
 }
 .hero-top {
