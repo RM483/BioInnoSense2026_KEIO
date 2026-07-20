@@ -157,6 +157,17 @@ class InMemoryCareNoteRepository implements CareNoteRepository {
   }
 
   @override
+  Future<void> update(CareNote note) async {
+    final i = _notes.indexWhere((n) => n.id == note.id);
+    if (i >= 0) {
+      _notes[i] = note;
+    } else {
+      _notes.insert(0, note);
+    }
+    _notify();
+  }
+
+  @override
   Future<void> delete(String dogId, String noteId) async {
     _notes.removeWhere((n) => n.id == noteId);
     _notify();

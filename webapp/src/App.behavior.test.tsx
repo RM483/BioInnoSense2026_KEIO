@@ -82,11 +82,25 @@ describe('HydroPaw Web SPA (MockProvider, IA v2.1)', () => {
     const saved = JSON.parse(localStorage.getItem('hydropaw.history.v1')!)
     expect(saved[0].dogId).toBe('dog-1')
 
-    // 日誌はホーム配下
+    // 日誌: 日付ごとの1枚カード + 測定を上部で主表示 (v2.3 §6-8)
     fireEvent.click(screen.getByText('履歴を見る'))
     await tick(10)
     expect(screen.getByText('日誌')).toBeTruthy()
-    expect(document.querySelectorAll('.history-item').length).toBeGreaterThan(0)
+    const card = document.querySelector('.day-card')!
+    expect(card).toBeTruthy()
+    expect(card.textContent).toContain('今日')
+    expect(card.textContent).toContain('最新の測定')
+    expect(card.textContent).toMatch(/\d+\.\d/) // ppm値
+    expect(card.textContent).toMatch(/\d{2}:\d{2}/) // 測定時刻
+    // 状態語は不安をあおらない文言 (§11)
+    expect([
+      '安定しています',
+      '少し変化が見られました',
+      'いつもと違う傾向が見られました',
+      '測定結果を確認できませんでした',
+    ]).toContain(
+      card.querySelector('.day-status')!.textContent!.trim(),
+    )
   }, 15000)
 
   it('3タブIA: 設定に技術情報+愛犬の登録設定、Dogsは縦一覧で編集できる', async () => {
@@ -125,20 +139,47 @@ describe('HydroPaw Web SPA (MockProvider, IA v2.1)', () => {
   it('ホームの犬切替: 見守り中の犬だけを切り替え、記録は犬ごとにスコープされる', async () => {
     await boot(2) // 上限2頭
 
-    // 記録を1件つける(ポチ)
+    // きょうの記録: 複数カテゴリを1回で入力し、まとめて保存 (v2.3 §2)
     fireEvent.click(screen.getByText('きょうの記録'))
     await tick(10)
+    // 散歩: いつも通り
+    fireEvent.click(screen.getByText('散歩'))
+    fireEvent.click(screen.getByText('いつも通り'))
+    // 食欲へ切り替えても散歩の入力は保持される (§2)
     fireEvent.click(screen.getByText('食欲'))
-    fireEvent.click(screen.getByText('気になる'))
+    fireEvent.click(screen.getByText('少なめ'))
     fireEvent.change(document.querySelector('.memo-input')!, {
       target: { value: '朝ごはんを半分残した' },
     })
-    fireEvent.click(screen.getByText('保存'))
+    // 散歩チップに入力済みの点が付いている (§5)
+    expect(document.querySelectorAll('.select-chip.filled').length)
+      .toBeGreaterThan(0)
+    fireEvent.click(screen.getByText('きょうの記録を保存'))
     await tick(20)
-    const notes = JSON.parse(localStorage.getItem('hydropaw.notes.v1')!)
-    expect(notes[0].type).toBe('appetite')
-    expect(notes[0].rating).toBe('concern')
-    expect(notes[0].schema).toBe(1)
+    let notes = JSON.parse(localStorage.getItem('hydropaw.notes.v1')!)
+    expect(notes).toHaveLength(2) // 散歩+食欲
+    const appetite = notes.find((n: { type: string }) => n.type === 'appetite')
+    expect(appetite.choice).toBe('less')
+    expect(appetite.memo).toBe('朝ごはんを半分残した')
+    expect(appetite.schema).toBe(2)
+
+    // 再度開くと当日分の編集として開き、変更しても重複しない (§4)
+    fireEvent.click(screen.getByText('きょうの記録'))
+    await tick(10)
+    fireEvent.click(screen.getByText('食欲'))
+    expect(
+      Array.from(document.querySelectorAll('.select-chip.on')).some(
+        (e) => e.textContent === '少なめ',
+      ),
+    ).toBe(true) // 既存内容が選択済み
+    fireEvent.click(screen.getByText('ふつう'))
+    fireEvent.click(screen.getByText('きょうの記録を保存'))
+    await tick(20)
+    notes = JSON.parse(localStorage.getItem('hydropaw.notes.v1')!)
+    expect(notes).toHaveLength(2) // 重複行が増えない
+    expect(
+      notes.find((n: { type: string }) => n.type === 'appetite').choice,
+    ).toBe('normal')
 
     // 犬を追加(名前を入れて保存した時点で正式作成 §5A)
     fireEvent.click(screen.getAllByText('愛犬')[0])
@@ -174,6 +215,56 @@ describe('HydroPaw Web SPA (MockProvider, IA v2.1)', () => {
     await tick(10)
     expect(document.body.textContent).not.toContain('朝ごはんを半分残した')
   })
+
+  it('日付カード: 測定+日誌の統合表示、健康日誌の削除で測定は残る (v2.3 §13-15,20)', async () => {
+    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    await boot()
+
+    // 測定1回 + きょうの記録(散歩・メモ)
+    await startMeasure('ポチ')
+    await tick(900)
+    await tick(3300)
+    fireEvent.click(screen.getByText('終了する'))
+    await tick(1700)
+    fireEvent.click(screen.getByText('ホームに戻る'))
+    await tick(50)
+    fireEvent.click(screen.getByText('きょうの記録'))
+    await tick(10)
+    fireEvent.click(screen.getByText('散歩'))
+    fireEvent.click(screen.getByText('長め'))
+    fireEvent.click(screen.getByText('メモ'))
+    fireEvent.change(document.querySelector('.memo-input')!, {
+      target: { value: '午後はよく眠っていました' },
+    })
+    fireEvent.click(screen.getByText('きょうの記録を保存'))
+    await tick(5100) // トースト消滅待ち
+
+    // 日付カード: 測定が上、健康日誌がラベル+値で下に並ぶ (§7,13,14)
+    fireEvent.click(screen.getByText('履歴を見る'))
+    await tick(10)
+    const card = document.querySelector('.day-card')!
+    expect(card.textContent).toContain('最新の測定')
+    expect(card.querySelector('.j-label')!.textContent).toBe('散歩')
+    expect(card.textContent).toContain('長め')
+    expect(card.textContent).toContain('午後はよく眠っていました')
+    // 未入力カテゴリ(食欲など)は表示しない (§13)
+    expect(card.textContent).not.toContain('食欲')
+    // 削除はカード表面に常時出さず、…メニュー内 (§15)
+    expect(card.textContent).not.toContain('削除する')
+    fireEvent.click(screen.getByLabelText('操作メニュー'))
+    await tick(10)
+    fireEvent.click(screen.getByText('健康日誌を削除'))
+    await tick(10)
+
+    // 健康日誌は消え、測定結果は残る (§15,20)
+    const after = document.querySelector('.day-card')!
+    expect(after.textContent).toContain('最新の測定')
+    expect(after.textContent).not.toContain('長め')
+    expect(JSON.parse(localStorage.getItem('hydropaw.notes.v1')!)).toHaveLength(0)
+    expect(
+      JSON.parse(localStorage.getItem('hydropaw.history.v1')!).length,
+    ).toBeGreaterThan(0)
+  }, 20000)
 
   it('犬管理: 上限案内→設定で拡張、記録なしは削除警告、記録ありは見守り終了→空状態→再開', async () => {
     await boot(1) // 上限1頭

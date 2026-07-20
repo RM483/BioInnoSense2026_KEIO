@@ -30,9 +30,16 @@ import {
   type Dog,
   type DogsState,
 } from './lib/dogs'
-import { loadNotes, saveNotes, type CareNote } from './lib/careNotes'
+import {
+  dayKeyOf,
+  loadNotes,
+  noteDayKey,
+  notesOfDay,
+  saveNotes,
+  type CareNote,
+} from './lib/careNotes'
 import { DogsView } from './dogsView'
-import { JournalView, NoteSheet } from './journal'
+import { JournalView, NoteSheet, type DayEntryInput } from './journal'
 import {
   ConfirmSheet,
   FirstRunSheet,
@@ -215,35 +222,77 @@ export default function App() {
     go('home')
   }, [go])
 
-  // ---- 健康日誌 ----
-  const addNote = useCallback(
-    (input: { type: CareNote['type']; rating?: CareNote['rating']; memo: string }) => {
+  // ---- 健康日誌 (v2.3: 1日1件・まとめ保存) ----
+  /**
+   * きょうの記録をまとめてupsertする (§2,4)。
+   * カテゴリごとに「今日の既存レコードがあれば更新、なければ追加」。
+   * 同じ日に同じカテゴリの行を重複追加しない。旧重複データは削除しない (§19)。
+   */
+  const saveDayNotes = useCallback(
+    (entries: DayEntryInput[]) => {
       if (!dog) return
+      const todayKey = dayKeyOf(new Date())
       setNotes((prev) => {
-        const note: CareNote = {
-          id: `n-${Date.now()}`,
-          dogId: dog.id,
-          at: new Date().toISOString(),
-          schema: 1,
-          ...input,
+        const next = [...prev]
+        for (const e of entries) {
+          const idx = next.findIndex(
+            (n) =>
+              n.dogId === dog.id &&
+              n.type === e.type &&
+              noteDayKey(n) === todayKey,
+          )
+          if (idx >= 0) {
+            // 既存(最新)を更新 — 別カテゴリの内容には触れない (§20)
+            next[idx] = {
+              ...next[idx],
+              choice: e.choice,
+              memo: e.memo,
+              schema: 2,
+            }
+          } else {
+            next.unshift({
+              id: `n-${Date.now()}-${e.type}`,
+              dogId: dog.id,
+              at: new Date().toISOString(),
+              type: e.type,
+              choice: e.choice,
+              memo: e.memo,
+              schema: 2,
+            })
+          }
         }
-        const next = [note, ...prev]
         saveNotes(next)
         return next
       })
       setSheet({ kind: 'none' })
-      showNotice('記録しました')
+      showNotice('きょうの記録を保存しました')
     },
     [dog, showNotice],
   )
 
-  const deleteNote = useCallback((id: string) => {
-    setNotes((prev) => {
-      const next = prev.filter((n) => n.id !== id)
-      saveNotes(next)
-      return next
-    })
-  }, [])
+  /** その日の健康日誌をすべて削除する。測定結果は削除しない (§15,20) */
+  const deleteDayJournal = useCallback(
+    (dayKey: string) => {
+      if (!dog) return
+      setNotes((prev) => {
+        const next = prev.filter(
+          (n) => !(n.dogId === dog.id && noteDayKey(n) === dayKey),
+        )
+        saveNotes(next)
+        return next
+      })
+    },
+    [dog],
+  )
+
+  /** 当日の既存記録(カテゴリ別最新) — シートを編集状態で開くために使う (§4) */
+  const todayNotes = useMemo(
+    () =>
+      dog
+        ? notesOfDay(notes, dog.id, dayKeyOf(new Date()))
+        : new Map<CareNote['type'], CareNote>(),
+    [notes, dog],
+  )
 
   // ---- 犬の管理 (§5-7, §11-13) ----
   const limitBody = (name?: string) =>
@@ -452,8 +501,8 @@ export default function App() {
           history={dogHistory}
           notes={dogNotes}
           onBack={() => go('home')}
-          onAddNote={() => setSheet({ kind: 'note' })}
-          onDeleteNote={deleteNote}
+          onEditToday={() => setSheet({ kind: 'note' })}
+          onDeleteDay={deleteDayJournal}
           onStartMeasure={requestMeasurement}
         />
       )}
@@ -519,8 +568,13 @@ export default function App() {
       )}
 
       {/* ---- シート群 ---- */}
+      {/* きょうの記録: まとめ入力・当日は編集として開く (§2,4,16) */}
       {sheet.kind === 'note' && dog && (
-        <NoteSheet onSave={addNote} onClose={() => setSheet({ kind: 'none' })} />
+        <NoteSheet
+          existing={todayNotes}
+          onSave={saveDayNotes}
+          onClose={() => setSheet({ kind: 'none' })}
+        />
       )}
       {sheet.kind === 'measureConfirm' && (
         <MeasureConfirmSheet

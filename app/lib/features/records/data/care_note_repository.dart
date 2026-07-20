@@ -10,6 +10,8 @@ import '../domain/care_note.dart';
 abstract interface class CareNoteRepository {
   Stream<List<CareNote>> watchNotes(String dogId, {int limit});
   Future<String> add(CareNote note);
+  /// 既存レコードの内容更新 (v2.3 §4: 1日1件のupsertに使用)
+  Future<void> update(CareNote note);
   Future<void> delete(String dogId, String noteId);
 }
 
@@ -43,6 +45,10 @@ class FirestoreCareNoteRepository implements CareNoteRepository {
     final ref = await _col(note.dogId).add(note.toJson());
     return ref.id;
   }
+
+  @override
+  Future<void> update(CareNote note) =>
+      _col(note.dogId).doc(note.id).set(note.toJson());
 
   @override
   Future<void> delete(String dogId, String noteId) =>

@@ -1567,3 +1567,193 @@ button:disabled { cursor: default; opacity: 0.4; }
   margin-left: auto;
   margin-right: auto;
 }
+
+/* ================================================================
+   IA v2.3 追加分 — 日付カード履歴 / きょうの記録まとめ入力
+   ================================================================ */
+
+/* ---- 日付カード (§7) ---- */
+.day-card { display: flex; flex-direction: column; gap: 14px; }
+.day-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.day-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.day-status {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: flex-end;
+}
+.day-status .level-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+/* ---- …メニュー (§15) ---- */
+.card-menu-wrap { position: relative; }
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+.card-menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  z-index: 6;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  border: 1px solid var(--hairline);
+  min-width: 190px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.card-menu button {
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.card-menu button:hover { background: var(--card-elevated); }
+.card-menu .danger-text { color: var(--danger); }
+
+/* ---- 測定の主表示 (§8,9) ---- */
+.measure-block {
+  background: var(--card-elevated);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.measure-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.measure-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.measure-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.measure-value .unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.measure-time {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.measure-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--warn);
+}
+.measure-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.measure-list { display: flex; flex-direction: column; gap: 6px; }
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+}
+.m-row .when { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.m-ppm { font-weight: 600; font-variant-numeric: tabular-nums; }
+.m-word { font-size: 12.5px; font-weight: 600; }
+.measure-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* ---- 健康日誌の行 (§13) ---- */
+.journal-rows { display: flex; flex-direction: column; gap: 8px; }
+.j-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.j-label {
+  flex: 0 0 44px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.j-value { font-size: 14.5px; font-weight: 600; }
+.j-memo {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ---- 自由メモ (§14) ---- */
+.memo-block {
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.memo-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+.memo-text.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---- きょうの記録シート (§5) ---- */
+.select-chip { position: relative; }
+.select-chip.filled { color: var(--text-primary); }
+.filled-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 6px;
+  vertical-align: 2px;
+}
+.chip-row.choice-grid { gap: 8px; }
+.chip-row.choice-grid .select-chip.wide {
+  flex: 1 1 calc(50% - 8px);
+  text-align: center;
+}
+.link-btn.center { align-self: center; }
