@@ -39,5 +39,15 @@ test_arq: test_arq.c ../App/Src/hpp.c ../App/Src/ble_link.c
 test_bgapi: test_bgapi.c ../App/Src/bgapi.c
 	$(CC) $(CFLAGS) -o $@ test_bgapi.c ../App/Src/bgapi.c
 
+# 擬似センサ(HYDROPAW_SIM_SENSOR)の合成呼気カーブを実state_machine+bapに
+# 流し、実機に焼く前に一連の経路(初期化→呼気検出→解析→採点→BLE)を先行検証。
+# make sim で実行。既定の test ターゲットには含めない(プレビュー用途)。
+.PHONY: sim
+sim: sim_preview
+	./sim_preview
+
+sim_preview: sim_preview.c $(SM_SRC)
+	$(CC) $(CFLAGS) -DHYDROPAW_SIM_SENSOR -o $@ sim_preview.c $(SM_SRC)
+
 clean:
-	rm -f $(TESTS)
+	rm -f $(TESTS) sim_preview

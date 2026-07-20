@@ -17,7 +17,11 @@
 #define CFG_IDLE_TO_SLEEP_MS         10000U /* IDLE→自動Sleep */
 #define CFG_BLE_INACTIVITY_MS        60000U /* 測定中の無通信→自動停止 */
 #define CFG_ERROR_TO_SLEEP_MS        60000U /* ERROR滞在の上限→省電力Sleepへ */
+#ifdef HYDROPAW_SIM_SENSOR
+#define CFG_WARMUP_MS                5000U  /* 擬似測定時のみ短縮(実機フローの短時間再現) */
+#else
 #define CFG_WARMUP_MS                60000U /* ウォームアップ扱い期間 */
+#endif
 #define CFG_MEASURE_MAX_MS           1800000U /* 連続測定の上限30分 */
 
 /* 電池 [mV] (VBAT = ADC×2 分圧) */
