@@ -4,7 +4,7 @@
  * 接続するDataProvider実装。
  *
  * 実機到着後に providers/index.ts で MockProvider から差し替える。
- * UUIDはAC02実機で要確認 (docs/03_ble_spec.md / Flutter側 BleUuids と同一)。
+ * UUIDは2026-07-20にAC02実機で確認・確定 (Flutter側 BleUuids と同一)。
  *
  * 注意: Web BluetoothはChrome系のみ・HTTPSまたはlocalhostでのみ動作。
  */
@@ -24,10 +24,11 @@ import {
   readEvtSummary,
 } from './hpp'
 
-const SERVICE_UUID = '0179bbd0-5351-48b5-bf6d-2167639bc867'
-const TX_UUID = '0179bbd1-5351-48b5-bf6d-2167639bc867' // FW→App Notify
-const RX_UUID = '0179bbd2-5351-48b5-bf6d-2167639bc867' // App→FW Write
-const NAME_PREFIX = 'HydroPaw'
+const SERVICE_UUID = '442f1570-8a00-9a28-cbe1-e1d4212d53eb'
+const TX_UUID = '442f1571-8a00-9a28-cbe1-e1d4212d53eb' // FW→App Notify
+const RX_UUID = '442f1572-8a00-9a28-cbe1-e1d4212d53eb' // App→FW Write
+// AC02はService UUIDを広告せず既定名 "Leaf_A_#<id>" で広告するため名前prefixで絞る
+const NAME_PREFIX = 'Leaf_A'
 
 export class BleProvider implements DataProvider {
   readonly name = 'BLE'
