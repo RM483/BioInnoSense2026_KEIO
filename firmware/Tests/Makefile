@@ -35,5 +35,13 @@ test_bap: test_bap.c ../App/Src/bap.c
 test_arq: test_arq.c ../App/Src/hpp.c ../App/Src/ble_link.c
 	$(CC) $(CFLAGS) -o $@ test_arq.c ../App/Src/hpp.c ../App/Src/ble_link.c
 
+# 擬似センサ(HYDROPAW_SIM_SENSOR)の合成呼気カーブを実state_machine+bapに流し検証。make sim で実行。
+.PHONY: sim
+sim: sim_preview
+	./sim_preview
+
+sim_preview: sim_preview.c $(SM_SRC)
+	$(CC) $(CFLAGS) -DHYDROPAW_SIM_SENSOR -o $@ sim_preview.c $(SM_SRC)
+
 clean:
-	rm -f $(TESTS)
+	rm -f $(TESTS) sim_preview

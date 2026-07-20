@@ -34,6 +34,7 @@ firmware/Tests/test_hpp
 firmware/Tests/test_dgs2_parser
 firmware/Tests/test_ring_buffer
 firmware/Tests/test_state_machine
+firmware/Tests/sim_preview
 *.o
 *.elf
 *.map
