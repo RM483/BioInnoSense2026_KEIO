@@ -1,23 +1,22 @@
 /// BLE関連の定数 — **UUIDはここ1箇所にのみ定義する**。
 ///
-/// AC02 (Leafony BLE Sugar) の仮想UARTサービスUUID。
-/// 2026-07-20 に実機(AC02)へ接続し nRF Connect でGATT構成を確認・確定。
+/// このブランチ(feature/arduino-fis)は 半導体式(FIS SB-19)+ Arduino Uno R4 WiFi 変種。
+/// UIは main と同一。R4は Nordic UART Service (NUS) で HPP フレームを notify する
+/// (arduino_fis/config.h と一致)。フレーム形式は本家と同一なので、UUIDと広告名prefixを
+/// R4に合わせるだけでアプリはそのまま動作する。
 /// (webapp/src/providers/BleProvider.ts の同名定数も同時に更新すること)
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 abstract final class BleUuids {
-  /// 仮想UARTサービス (実機確認済み 2026-07-20)
-  static final service = Guid('442f1570-8a00-9a28-cbe1-e1d4212d53eb');
+  /// Nordic UART Service (R4 arduino_fis と一致)
+  static final service = Guid('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
 
-  /// FW→App (Notify) (実機確認済み)
-  static final tx = Guid('442f1571-8a00-9a28-cbe1-e1d4212d53eb');
+  /// FW→App (Notify)
+  static final tx = Guid('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
 
-  /// App→FW (Write / Write Without Response) (実機確認済み)
-  static final rx = Guid('442f1572-8a00-9a28-cbe1-e1d4212d53eb');
+  /// App→FW (Write / Write Without Response)
+  static final rx = Guid('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
 
-  /// Advertising名のprefix (スキャンフィルタに使用)。
-  /// AC02はService UUIDを広告せず、既定名 "Leaf_A_#<id>" で広告するため
-  /// 名前prefixで絞り込む (実機確認済み 2026-07-20)。
-  /// 将来FW側でカスタム広告名を設定したら "HydroPaw" 等へ更新する。
-  static const namePrefix = 'Leaf_A';
+  /// Advertising名のprefix (スキャンフィルタに使用)。R4は "Fuwan-R4" で広告する。
+  static const namePrefix = 'Fuwan';
 }

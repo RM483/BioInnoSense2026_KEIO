@@ -24,11 +24,11 @@ import {
   readEvtSummary,
 } from './hpp'
 
-const SERVICE_UUID = '442f1570-8a00-9a28-cbe1-e1d4212d53eb'
-const TX_UUID = '442f1571-8a00-9a28-cbe1-e1d4212d53eb' // FW→App Notify
-const RX_UUID = '442f1572-8a00-9a28-cbe1-e1d4212d53eb' // App→FW Write
-// AC02はService UUIDを広告せず既定名 "Leaf_A_#<id>" で広告するため名前prefixで絞る
-const NAME_PREFIX = 'Leaf_A'
+// Nordic UART Service (R4 arduino_fis/config.h と一致)
+const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+const TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // FW→App Notify
+const RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e' // App→FW Write
+const NAME_PREFIX = 'Fuwan' // R4は "Fuwan-R4" で広告
 
 export class BleProvider implements DataProvider {
   readonly name = 'BLE'

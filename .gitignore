@@ -56,3 +56,4 @@ Thumbs.db
 .vscode/
 firmware/Tests/test_bap
 firmware/Tests/test_arq
+arduino_fis/test/test_fis
