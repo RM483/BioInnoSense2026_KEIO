@@ -1,10 +1,10 @@
 /// <reference types="web-bluetooth" />
 /**
- * BleProvider — Web Bluetooth経由でHydroPaw実機(AC02透過UART + HPP)に
- * 接続するDataProvider実装。
+ * BleProvider — Web Bluetooth経由でHydroPaw実機(HPP over BLE)に接続する実装。
  *
- * 実機到着後に providers/index.ts で MockProvider から差し替える。
- * UUIDはAC02実機で要確認 (docs/03_ble_spec.md / Flutter側 BleUuids と同一)。
+ * このブランチ(feature/arduino-fis-variant)は 半導体式(FIS SB-19)+ Arduino Uno R4 WiFi。
+ * R4は Nordic UART Service(NUS)でHPPフレームをnotifyする(arduino_fis/config.h と一致)。
+ * フレーム形式は本家と同一なのでデコーダは無変更、UUID/広告名prefixのみR4へ合わせる。
  *
  * 注意: Web BluetoothはChrome系のみ・HTTPSまたはlocalhostでのみ動作。
  */
@@ -24,10 +24,11 @@ import {
   readEvtSummary,
 } from './hpp'
 
-const SERVICE_UUID = '0179bbd0-5351-48b5-bf6d-2167639bc867'
-const TX_UUID = '0179bbd1-5351-48b5-bf6d-2167639bc867' // FW→App Notify
-const RX_UUID = '0179bbd2-5351-48b5-bf6d-2167639bc867' // App→FW Write
-const NAME_PREFIX = 'HydroPaw'
+// Nordic UART Service (R4 arduino_fis/config.h と一致)
+const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
+const TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // FW→App Notify
+const RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e' // App→FW Write
+const NAME_PREFIX = 'Fuwan'
 
 export class BleProvider implements DataProvider {
   readonly name = 'BLE'
