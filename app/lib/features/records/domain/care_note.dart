@@ -1,9 +1,11 @@
-/// 健康日誌の1件 — 散歩・食欲・排便・薬・体調・自由メモ (docs/21 §日誌)。
+/// 健康日誌の1件 — docs/21 v2.3。
 ///
-/// 「構造化データ + 自由記述」の両方を持つ:
-/// - type / rating はAI解析・集計に使える構造化フィールド
-/// - memo は飼い主の言葉をそのまま残す自由記述
-/// コード生成(Freezed)に依存しない素のDartクラス(ビルド手順を増やさない)。
+/// 考え方 (§1,4):
+/// - 測定以外の健康日誌は「1日につき各カテゴリ1件まで」(upsertで担保)
+/// - schema 2: 構造化された選択(choice) + 任意の補足メモ(memo)
+/// - schema 1(旧): rating(3段階) — 読み取り互換を維持し、既存データは
+///   削除・変換しない (§19)
+/// コード生成(Freezed)に依存しない素のDartクラス。
 enum CareNoteType {
   walk, // 散歩
   appetite, // 食欲
@@ -16,17 +18,13 @@ enum CareNoteType {
         (t) => t.name == v,
         orElse: () => CareNoteType.memo,
       );
-
-  /// 3段階評価(良い/ふつう/気になる)を持つ種別か
-  bool get hasRating =>
-      this == appetite || this == poop || this == condition;
 }
 
-/// 3段階の様子評価。数値でなく「気になる」という言葉に対応させる。
+/// 旧schema1の3段階評価(読み取り互換用)。新規保存では使わない。
 enum CareRating {
-  good, // 良い
-  normal, // ふつう
-  concern; // 気になる
+  good,
+  normal,
+  concern;
 
   static CareRating? parse(String? v) {
     for (final r in CareRating.values) {
@@ -36,39 +34,69 @@ enum CareRating {
   }
 }
 
+/// カテゴリごとの選択肢の値 (§3)。表示文言はl10n側(care_note_sheet)。
+const noteChoices = <CareNoteType, List<String>>{
+  CareNoteType.walk: ['none', 'short', 'usual', 'long'],
+  CareNoteType.appetite: ['none', 'less', 'normal', 'lots'],
+  CareNoteType.poop: ['none', 'less', 'usual', 'more'],
+  CareNoteType.medicine: ['none', 'taken'],
+  CareNoteType.condition: ['concern', 'slight', 'usual', 'energetic'],
+  CareNoteType.memo: [],
+};
+
 class CareNote {
   const CareNote({
     required this.id,
     required this.dogId,
     required this.at,
     required this.type,
+    this.choice,
     this.rating,
     this.memo = '',
+    this.schema = 2,
   });
 
   final String id;
   final String dogId;
   final DateTime at;
   final CareNoteType type;
-  final CareRating? rating; // hasRatingの種別のみ
-  final String memo;
 
-  CareNote copyWith({String? id}) => CareNote(
+  /// schema2: 選択肢の値 (§3)
+  final String? choice;
+
+  /// schema1(旧)の評価 — 表示互換のみ
+  final CareRating? rating;
+
+  /// 自由記述(memoカテゴリ本文、他カテゴリでは補足メモ)
+  final String memo;
+  final int schema;
+
+  /// 「気になる」系の内容か(控えめな注意色に使う)
+  bool get isConcern =>
+      rating == CareRating.concern ||
+      (type == CareNoteType.condition &&
+          (choice == 'concern' || choice == 'slight')) ||
+      (type == CareNoteType.appetite && choice == 'none');
+
+  CareNote copyWith({String? id, String? choice, String? memo}) => CareNote(
         id: id ?? this.id,
         dogId: dogId,
         at: at,
         type: type,
+        choice: choice ?? this.choice,
         rating: rating,
-        memo: memo,
+        memo: memo ?? this.memo,
+        schema: 2,
       );
 
   Map<String, dynamic> toJson() => {
         'dogId': dogId,
         'at': at.toIso8601String(),
         'type': type.name,
+        'choice': choice,
         'rating': rating?.name,
         'memo': memo,
-        'schema': 1, // 将来のAI解析のためのスキーマバージョン
+        'schema': schema,
       };
 
   factory CareNote.fromJson(String id, Map<String, dynamic> json) => CareNote(
@@ -77,7 +105,27 @@ class CareNote {
         at: DateTime.tryParse((json['at'] as String?) ?? '') ??
             DateTime.now(),
         type: CareNoteType.parse(json['type'] as String?),
+        choice: json['choice'] as String?,
         rating: CareRating.parse(json['rating'] as String?),
         memo: (json['memo'] as String?) ?? '',
+        schema: (json['schema'] as num?)?.toInt() ?? 1,
       );
+}
+
+/// ローカル日付キー(yyyy-mm-dd相当の比較用)
+DateTime dayOf(DateTime d) => DateTime(d.year, d.month, d.day);
+
+bool sameDay(DateTime a, DateTime b) =>
+    a.year == b.year && a.month == b.month && a.day == b.day;
+
+/// ある日のカテゴリ別「最新1件」(§4)。旧重複データは削除せず最新を採用。
+Map<CareNoteType, CareNote> notesOfDay(
+    List<CareNote> notes, DateTime day) {
+  final map = <CareNoteType, CareNote>{};
+  for (final n in notes) {
+    // notesは新しい順 — 先勝ちで最新を採用
+    if (!sameDay(n.at, day)) continue;
+    map.putIfAbsent(n.type, () => n);
+  }
+  return map;
 }

@@ -1,10 +1,10 @@
 /// <reference types="web-bluetooth" />
 /**
- * BleProvider — Web Bluetooth経由でHydroPaw実機(HPP over BLE)に接続する実装。
+ * BleProvider — Web Bluetooth経由でHydroPaw実機(AC02透過UART + HPP)に
+ * 接続するDataProvider実装。
  *
- * このブランチ(feature/arduino-fis-variant)は 半導体式(FIS SB-19)+ Arduino Uno R4 WiFi。
- * R4は Nordic UART Service(NUS)でHPPフレームをnotifyする(arduino_fis/config.h と一致)。
- * フレーム形式は本家と同一なのでデコーダは無変更、UUID/広告名prefixのみR4へ合わせる。
+ * 実機到着後に providers/index.ts で MockProvider から差し替える。
+ * UUIDは2026-07-20にAC02実機で確認・確定 (Flutter側 BleUuids と同一)。
  *
  * 注意: Web BluetoothはChrome系のみ・HTTPSまたはlocalhostでのみ動作。
  */
@@ -24,12 +24,10 @@ import {
   readEvtSummary,
 } from './hpp'
 
-// STM32+AC02実機テスト用 (main側の実機確認済みUUID 2026-07-20)。
-// Arduino R4(NUS)でテストする時は Fuwan/6e400001... に戻すこと。
 const SERVICE_UUID = '442f1570-8a00-9a28-cbe1-e1d4212d53eb'
 const TX_UUID = '442f1571-8a00-9a28-cbe1-e1d4212d53eb' // FW→App Notify
 const RX_UUID = '442f1572-8a00-9a28-cbe1-e1d4212d53eb' // App→FW Write
-// AC02はService UUIDを広告せず既定名 "Leaf_A_#<id>" で広告する
+// AC02はService UUIDを広告せず既定名 "Leaf_A_#<id>" で広告するため名前prefixで絞る
 const NAME_PREFIX = 'Leaf_A'
 
 export class BleProvider implements DataProvider {
@@ -91,8 +89,9 @@ export class BleProvider implements DataProvider {
     this.notifyConn('disconnected')
   }
 
-  /** FWは無通信60秒(CFG_BLE_INACTIVITY_MS)で測定を自動停止するため、
-   *  測定中は20秒毎にGET_STATUSを送って接続維持を通知する(電池情報も更新される) */
+  /** FWのBLE無通信自動停止(CFG_BLE_INACTIVITY_MS)対策のキープアライブ。
+   *  現行FWは無効化(0)済みだが、有効なFWでも動くよう20秒毎にGET_STATUSを
+   *  送る(電池情報の定期更新も兼ねる)。 */
   private keepaliveId: ReturnType<typeof setInterval> | null = null
 
   private startKeepalive() {

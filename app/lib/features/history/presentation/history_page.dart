@@ -1,10 +1,10 @@
-/// 日誌 — 測定と毎日の記録(散歩・食欲・排便・薬・体調・メモ)をひとつの
-/// タイムラインで振り返る (docs/21 §履歴/日誌)。
+/// 日誌 — 日付ごとの1枚カード (docs/21 v2.3 §6-18)。
 ///
-/// 普段は「今日・きのう・おととい…」の日誌形式。カレンダーは主役にせず、
-/// 右上のアイコンで必要な時だけ月表示へ切り替える。
-/// 数値の詳細はタップした先(詳細画面)に置く。
-import 'package:fl_chart/fl_chart.dart';
+/// - 記録が存在する最新3日分の日付カード。測定を上部で主表示 (§6-8)
+/// - 同日の複数測定は同じカードにまとめ、注意結果を状態表示で優先 (§9,10)
+/// - 健康日誌はラベル+値でまとめて表示。未入力項目は出さない (§13)
+/// - 削除は「…」メニューへ。健康日誌を削除しても測定は残す (§15,20)
+/// Web版 journal.tsx のミラー。
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
@@ -40,7 +40,7 @@ class HistoryNotifier extends AsyncNotifier<List<Measurement>> {
     _loadingMore = false;
     return ref
         .read(measurementRepositoryProvider)
-        .fetchHistory(dog.id, limit: 20);
+        .fetchHistory(dog.id, limit: 30);
   }
 
   Future<void> loadMore() async {
@@ -52,7 +52,7 @@ class HistoryNotifier extends AsyncNotifier<List<Measurement>> {
       final more = await ref.read(measurementRepositoryProvider).fetchHistory(
           dog.id,
           before: current.last.startedAt,
-          limit: 20);
+          limit: 30);
       _hasMore = more.isNotEmpty;
       state = AsyncData([...current, ...more]);
     } finally {
@@ -61,17 +61,68 @@ class HistoryNotifier extends AsyncNotifier<List<Measurement>> {
   }
 }
 
-/// タイムラインの1件(測定 or 日誌)。
-class _Entry {
-  const _Entry.measurement(Measurement this.measurement)
-      : note = null;
-  const _Entry.note(CareNote this.note) : measurement = null;
+/* ─────────────── 状態語と優先ルール (§10,11) ─────────────── */
 
-  final Measurement? measurement;
-  final CareNote? note;
+enum DayStatus { stable, slight, elevated, unknown }
 
-  DateTime get at => measurement?.startedAt ?? note!.at;
+String dayStatusWord(DayStatus s, AppLocalizations l10n) => switch (s) {
+      DayStatus.stable => l10n.dayStatusStable,
+      DayStatus.slight => l10n.dayStatusSlight,
+      DayStatus.elevated => l10n.dayStatusElevated,
+      DayStatus.unknown => l10n.dayStatusUnknown,
+    };
+
+Color dayStatusColor(DayStatus s, AppPalette p) => switch (s) {
+      DayStatus.stable => p.success,
+      // 注意でも赤一色で強調しない (§11)
+      DayStatus.slight || DayStatus.elevated => p.warn,
+      DayStatus.unknown => p.textTertiary,
+    };
+
+const _qualityMin = 60;
+
+bool _reliable(Measurement m) => !m.hasQuality || m.quality >= _qualityMin;
+
+/// その日の状態: 安定していない結果が1件でもあれば優先 (§10)。
+DayStatus? dayStatusOf(List<Measurement> ms) {
+  if (ms.isEmpty) return null;
+  final reliable = ms.where(_reliable).toList();
+  if (reliable.isEmpty) return DayStatus.unknown;
+  final levels =
+      reliable.map((m) => HealthAssessment.levelForPpm(m.avgPpm)).toSet();
+  if (levels.contains(HealthLevel.elevated)) return DayStatus.elevated;
+  if (levels.contains(HealthLevel.slightlyElevated)) return DayStatus.slight;
+  return DayStatus.stable;
 }
+
+/* ─────────────── 日付グループ ─────────────── */
+
+class DayData {
+  DayData(this.day);
+  final DateTime day;
+  final measurements = <Measurement>[]; // 新しい順
+  final notes = <CareNoteType, CareNote>{}; // カテゴリ別最新 (§4)
+}
+
+List<DayData> buildDays(List<Measurement> history, List<CareNote> notes) {
+  final map = <DateTime, DayData>{};
+  DayData of(DateTime at) =>
+      map.putIfAbsent(dayOf(at), () => DayData(dayOf(at)));
+  for (final m in history) {
+    of(m.startedAt).measurements.add(m);
+  }
+  for (final n in notes) {
+    of(n.at).notes.putIfAbsent(n.type, () => n); // 最新を採用 (§19)
+  }
+  final days = map.values.toList()
+    ..sort((a, b) => b.day.compareTo(a.day));
+  for (final d in days) {
+    d.measurements.sort((a, b) => b.startedAt.compareTo(a.startedAt));
+  }
+  return days;
+}
+
+/* ─────────────── 画面 ─────────────── */
 
 class HistoryPage extends ConsumerStatefulWidget {
   const HistoryPage({super.key});
@@ -82,6 +133,7 @@ class HistoryPage extends ConsumerStatefulWidget {
 
 class _HistoryPageState extends ConsumerState<HistoryPage> {
   bool _calendarMode = false;
+  int _visibleDays = 3; // 最新3日分 (§6)
 
   @override
   Widget build(BuildContext context) {
@@ -134,17 +186,35 @@ class _HistoryPageState extends ConsumerState<HistoryPage> {
                 style: AppText.body.copyWith(color: p.textSecondary)),
           ),
           data: (items) {
-            final entries = <_Entry>[
-              for (final m in items) _Entry.measurement(m),
-              for (final n in notes) _Entry.note(n),
-            ]..sort((a, b) => b.at.compareTo(a.at));
-
-            if (entries.isEmpty) {
+            final days = buildDays(items, notes);
+            if (days.isEmpty) {
               return _EmptyState(l10n: l10n, p: p, ref: ref);
             }
             return _calendarMode
-                ? _CalendarView(entries: entries)
-                : _JournalList(items: items, entries: entries);
+                ? _CalendarView(days: days, dogId: dog?.id ?? '')
+                : ListView(
+                    padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+                    children: [
+                      for (final day
+                          in days.take(_visibleDays)) ...[
+                        DayCard(day: day, dogId: dog?.id ?? ''),
+                        const SizedBox(height: 14),
+                      ],
+                      // ---- 過去の記録 (§17) ----
+                      if (days.length > _visibleDays)
+                        TextButton(
+                          onPressed: () {
+                            setState(() => _visibleDays += 7);
+                            ref
+                                .read(historyProvider.notifier)
+                                .loadMore();
+                          },
+                          child: Text(l10n.pastRecords,
+                              style: AppText.bodyMedium
+                                  .copyWith(color: p.accent)),
+                        ),
+                    ],
+                  );
           },
         ),
       ),
@@ -160,7 +230,6 @@ class _EmptyState extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // 空状態も行き止まりにしない (docs/17 §9, A11)
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -181,92 +250,351 @@ class _EmptyState extends StatelessWidget {
   }
 }
 
-// ─────────────────────────── 日誌(リスト) ───────────────────────────
+/* ─────────────── 日付カード (§7) ─────────────── */
 
-class _JournalList extends ConsumerWidget {
-  const _JournalList({required this.items, required this.entries});
-
-  final List<Measurement> items; // 測定のみ(推移カード用)
-  final List<_Entry> entries; // 測定+日誌(新しい順)
+class DayCard extends ConsumerStatefulWidget {
+  const DayCard({super.key, required this.day, required this.dogId});
+  final DayData day;
+  final String dogId;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DayCard> createState() => _DayCardState();
+}
+
+class _DayCardState extends ConsumerState<DayCard> {
+  bool _showAll = false;
+  bool _memoOpen = false;
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return NotificationListener<ScrollEndNotification>(
-      onNotification: (n) {
-        if (n.metrics.extentAfter < 200) {
-          ref.read(historyProvider.notifier).loadMore();
-        }
-        return false;
-      },
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+    final p = context.palette;
+    final day = widget.day;
+    final locale = Localizations.localeOf(context).toLanguageTag();
+    final isToday = sameDay(day.day, DateTime.now());
+
+    final status = dayStatusOf(day.measurements);
+    final latest =
+        day.measurements.isEmpty ? null : day.measurements.first;
+    final latestLevel = latest == null
+        ? null
+        : _reliable(latest)
+            ? HealthAssessment.levelForPpm(latest.avgPpm)
+            : null;
+    // 状態表示は注意結果を優先。最新と判定が違う時は短い補足 (§10)
+    final mismatch = status != null &&
+        latest != null &&
+        ((status == DayStatus.elevated &&
+                latestLevel != HealthLevel.elevated) ||
+            (status == DayStatus.slight &&
+                latestLevel == HealthLevel.stable));
+
+    final memoNote = day.notes[CareNoteType.memo];
+    final journalTypes = CareNoteType.values
+        .where((t) => t != CareNoteType.memo && day.notes.containsKey(t))
+        .toList();
+    final hasJournal = journalTypes.isNotEmpty ||
+        (memoNote != null && memoNote.memo.isNotEmpty);
+    final memoText = memoNote?.memo ?? '';
+    final memoLong = memoText.length > 100;
+
+    return AppCard(
+      padding: const EdgeInsets.fromLTRB(20, 16, 12, 16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          if (items.length >= 2) ...[
-            _TrendChartCard(items: items, l10n: l10n),
-            const SizedBox(height: 20),
+          // ---- 1. その日の状態 (§10,11) ----
+          Row(
+            children: [
+              Text(_dayLabel(context, day.day, l10n),
+                  style: AppText.bodyMedium.copyWith(
+                      color: p.textPrimary, fontWeight: FontWeight.w700)),
+              const Spacer(),
+              if (status != null) ...[
+                Container(
+                  width: 7,
+                  height: 7,
+                  decoration: BoxDecoration(
+                      color: dayStatusColor(status, p),
+                      shape: BoxShape.circle),
+                ),
+                const SizedBox(width: 6),
+                Text(dayStatusWord(status, l10n),
+                    style: AppText.caption.copyWith(
+                        color: dayStatusColor(status, p),
+                        fontWeight: FontWeight.w600)),
+              ],
+              // ---- 控えめな操作メニュー (§15,16) ----
+              if (isToday || hasJournal)
+                PopupMenuButton<String>(
+                  icon: Icon(Icons.more_horiz,
+                      size: 20, color: p.textTertiary),
+                  color: p.card,
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14)),
+                  onSelected: (v) {
+                    if (v == 'edit') {
+                      showCareNoteSheet(context, ref, widget.dogId);
+                    } else if (v == 'delete') {
+                      _confirmDeleteJournal(context, l10n, p);
+                    }
+                  },
+                  itemBuilder: (_) => [
+                    if (isToday)
+                      PopupMenuItem(
+                        value: 'edit',
+                        child: Text(l10n.editTodayRecord,
+                            style: AppText.body
+                                .copyWith(color: p.textPrimary)),
+                      ),
+                    if (hasJournal)
+                      PopupMenuItem(
+                        value: 'delete',
+                        child: Text(l10n.deleteJournalMenu,
+                            style:
+                                AppText.body.copyWith(color: p.danger)),
+                      ),
+                  ],
+                )
+              else
+                const SizedBox(width: 8),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // ---- 2. 測定結果(主表示 §8,9,18) ----
+          if (latest != null)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 16, vertical: 12),
+              margin: const EdgeInsets.only(right: 8),
+              decoration: BoxDecoration(
+                color: p.cardElevated,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.baseline,
+                    textBaseline: TextBaseline.alphabetic,
+                    children: [
+                      Text(l10n.latestMeasurementLabel,
+                          style: AppText.caption.copyWith(
+                              color: p.textTertiary,
+                              fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 10),
+                      Text(latest.avgPpm.toStringAsFixed(1),
+                          style: AppText.numeral.copyWith(
+                              fontSize: 24, color: p.textPrimary)),
+                      Text(' ${l10n.ppm}',
+                          style: AppText.caption
+                              .copyWith(color: p.textSecondary)),
+                      const SizedBox(width: 10),
+                      Text(DateFormat.Hm(locale).format(latest.startedAt),
+                          style: AppText.caption
+                              .copyWith(color: p.textTertiary)),
+                    ],
+                  ),
+                  if (mismatch) ...[
+                    const SizedBox(height: 6),
+                    Text(l10n.dayMismatchNote,
+                        style: AppText.caption
+                            .copyWith(color: p.warn, height: 1.5)),
+                  ],
+                  if (day.measurements.length >= 2) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                        l10n.dayMeasureCount(day.measurements.length),
+                        style: AppText.caption.copyWith(
+                            color: p.textTertiary,
+                            fontWeight: FontWeight.w600)),
+                    const SizedBox(height: 4),
+                    for (final m in (day.measurements.length <= 2 ||
+                            _showAll
+                        ? day.measurements
+                        : day.measurements.take(1)))
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(
+                          children: [
+                            Text(
+                                DateFormat.Hm(locale)
+                                    .format(m.startedAt),
+                                style: AppText.caption.copyWith(
+                                    color: p.textTertiary)),
+                            const SizedBox(width: 12),
+                            Text(
+                                '${m.avgPpm.toStringAsFixed(1)} ${l10n.ppm}',
+                                style: AppText.caption.copyWith(
+                                    color: p.textPrimary,
+                                    fontWeight: FontWeight.w600)),
+                            const SizedBox(width: 12),
+                            Text(
+                              _reliable(m)
+                                  ? HealthAssessment.levelForPpm(m.avgPpm)
+                                      .shortLabel(l10n)
+                                  : l10n.unreliableShort,
+                              style: AppText.caption.copyWith(
+                                  color: _reliable(m)
+                                      ? HealthAssessment.levelForPpm(
+                                              m.avgPpm)
+                                          .color(p)
+                                      : p.textTertiary,
+                                  fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                      ),
+                    if (day.measurements.length > 2)
+                      GestureDetector(
+                        onTap: () =>
+                            setState(() => _showAll = !_showAll),
+                        child: Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                              _showAll ? l10n.closeLabel : l10n.showAll,
+                              style: AppText.caption.copyWith(
+                                  color: p.textSecondary,
+                                  decoration: TextDecoration.underline,
+                                  decorationColor: p.hairline)),
+                        ),
+                      ),
+                  ],
+                ],
+              ),
+            )
+          else
+            // 測定がない日は控えめに (§18)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 2),
+              child: Text(l10n.noMeasureThisDay,
+                  style:
+                      AppText.caption.copyWith(color: p.textTertiary)),
+            ),
+
+          // ---- 3. 健康日誌 (§13) ----
+          if (journalTypes.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            for (final t in journalTypes)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8, right: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 44,
+                      child: Text(careNoteTypeLabel(t, l10n),
+                          style: AppText.caption.copyWith(
+                              color: p.textTertiary,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Wrap(
+                        spacing: 10,
+                        crossAxisAlignment: WrapCrossAlignment.center,
+                        children: [
+                          Text(
+                            noteValueLabel(day.notes[t]!, l10n),
+                            style: AppText.bodyMedium.copyWith(
+                                fontSize: 14.5,
+                                color: day.notes[t]!.isConcern
+                                    ? p.warn
+                                    : p.textPrimary),
+                          ),
+                          if (day.notes[t]!.memo.isNotEmpty)
+                            Text(day.notes[t]!.memo,
+                                style: AppText.caption.copyWith(
+                                    color: p.textSecondary)),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
           ],
-          ..._journal(context, ref, entries, l10n),
+
+          // ---- 4. 自由メモ (§14) ----
+          if (memoText.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Divider(color: p.hairline, height: 16),
+            Text(l10n.noteMemo,
+                style: AppText.caption.copyWith(
+                    color: p.textTertiary, fontWeight: FontWeight.w600)),
+            const SizedBox(height: 4),
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Text(
+                memoText,
+                maxLines: memoLong && !_memoOpen ? 3 : null,
+                overflow: memoLong && !_memoOpen
+                    ? TextOverflow.ellipsis
+                    : null,
+                style: AppText.body
+                    .copyWith(color: p.textPrimary, height: 1.6),
+              ),
+            ),
+            if (memoLong)
+              GestureDetector(
+                onTap: () => setState(() => _memoOpen = !_memoOpen),
+                child: Padding(
+                  padding: const EdgeInsets.only(top: 6),
+                  child: Text(_memoOpen ? l10n.closeLabel : l10n.readMore,
+                      style: AppText.caption.copyWith(
+                          color: p.textSecondary,
+                          decoration: TextDecoration.underline,
+                          decorationColor: p.hairline)),
+                ),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// 健康日誌のみ削除。測定結果は残す (§15,20)
+  void _confirmDeleteJournal(
+      BuildContext context, AppLocalizations l10n, AppPalette p) {
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => AlertDialog(
+        content: Text(l10n.deleteJournalConfirm),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(dialogContext).pop(),
+            child: Text(l10n.cancel),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(dialogContext).pop();
+              ref
+                  .read(careNoteControllerProvider.notifier)
+                  .deleteDay(widget.dogId, widget.day.day);
+            },
+            child: Text(l10n.deleteConfirmAction,
+                style: TextStyle(color: p.danger)),
+          ),
         ],
       ),
     );
   }
 }
 
-/// 日誌: 日付見出し + その日の記録行(測定・日誌が時刻順に混ざる)。
-List<Widget> _journal(BuildContext context, WidgetRef ref,
-    List<_Entry> entries, AppLocalizations l10n) {
-  final p = context.palette;
-  final out = <Widget>[];
-  DateTime? lastDay;
-  for (final e in entries) {
-    final day = DateTime(e.at.year, e.at.month, e.at.day);
-    if (day != lastDay) {
-      out.add(Padding(
-        padding: EdgeInsets.only(top: lastDay == null ? 0 : 14, bottom: 10),
-        child: Text(
-          _dayLabel(context, e.at, l10n),
-          style: AppText.caption
-              .copyWith(color: p.textTertiary, fontWeight: FontWeight.w600),
-        ),
-      ));
-      lastDay = day;
-    }
-    out.add(e.measurement != null
-        ? _HistoryRow(measurement: e.measurement!)
-        : _NoteRow(note: e.note!));
-    out.add(const SizedBox(height: 10));
-  }
-  return out;
-}
+/* ─────────────── カレンダー表示 (必要な時だけ §17) ─────────────── */
 
-String _dayLabel(BuildContext context, DateTime d, AppLocalizations l10n) {
-  final locale = Localizations.localeOf(context).toLanguageTag();
-  final now = DateTime.now();
-  final today = DateTime(now.year, now.month, now.day);
-  final day = DateTime(d.year, d.month, d.day);
-  if (day == today) return l10n.today;
-  if (day == today.subtract(const Duration(days: 1))) return l10n.yesterday;
-  if (day == today.subtract(const Duration(days: 2))) {
-    return l10n.dayBeforeYesterday;
-  }
-  return DateFormat.MMMEd(locale).format(d);
-}
-
-// ─────────────────────────── カレンダー表示 ───────────────────────────
-
-/// 必要な時だけ使う月表示。記録のある日に点を打ち、
-/// タップでその日の記録を下に表示する。
 class _CalendarView extends ConsumerStatefulWidget {
-  const _CalendarView({required this.entries});
-  final List<_Entry> entries;
+  const _CalendarView({required this.days, required this.dogId});
+  final List<DayData> days;
+  final String dogId;
 
   @override
   ConsumerState<_CalendarView> createState() => _CalendarViewState();
 }
 
 class _CalendarViewState extends ConsumerState<_CalendarView> {
-  late DateTime _month; // 表示中の月(1日固定)
+  late DateTime _month;
   late DateTime _selected;
 
   @override
@@ -274,7 +602,7 @@ class _CalendarViewState extends ConsumerState<_CalendarView> {
     super.initState();
     final now = DateTime.now();
     _month = DateTime(now.year, now.month);
-    _selected = DateTime(now.year, now.month, now.day);
+    _selected = dayOf(now);
   }
 
   @override
@@ -282,30 +610,21 @@ class _CalendarViewState extends ConsumerState<_CalendarView> {
     final l10n = AppLocalizations.of(context)!;
     final p = context.palette;
     final locale = Localizations.localeOf(context).toLanguageTag();
-
-    // 日付 → 記録の索引
-    final byDay = <DateTime, List<_Entry>>{};
-    for (final e in widget.entries) {
-      final d = DateTime(e.at.year, e.at.month, e.at.day);
-      byDay.putIfAbsent(d, () => []).add(e);
-    }
-    final dayEntries = byDay[_selected] ?? const <_Entry>[];
+    final byDay = {for (final d in widget.days) d.day: d};
+    final selectedData = byDay[_selected];
 
     final firstWeekday = _month.weekday % 7; // 日曜=0
     final daysInMonth = DateTime(_month.year, _month.month + 1, 0).day;
-    final today = DateTime.now();
+    final today = dayOf(DateTime.now());
 
     return ListView(
       padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
       children: [
-        // ---- 月ヘッダ ----
         Row(
           children: [
             Expanded(
-              child: Text(
-                DateFormat.yMMMM(locale).format(_month),
-                style: AppText.title.copyWith(color: p.textPrimary),
-              ),
+              child: Text(DateFormat.yMMMM(locale).format(_month),
+                  style: AppText.title.copyWith(color: p.textPrimary)),
             ),
             IconButton(
               icon: Icon(Icons.chevron_left, color: p.textSecondary),
@@ -320,131 +639,78 @@ class _CalendarViewState extends ConsumerState<_CalendarView> {
           ],
         ),
         const SizedBox(height: 8),
-
-        // ---- 曜日 + 日グリッド ----
         GridView.count(
           crossAxisCount: 7,
           shrinkWrap: true,
           physics: const NeverScrollableScrollPhysics(),
           children: [
-            for (final w in _weekdayLabels(locale))
+            for (var i = 0; i < 7; i++)
               Center(
-                  child: Text(w,
-                      style: AppText.caption
-                          .copyWith(color: p.textTertiary, fontSize: 11))),
+                child: Text(
+                    DateFormat.E(locale).format(DateTime(2023, 1, 1 + i)),
+                    style: AppText.caption
+                        .copyWith(color: p.textTertiary, fontSize: 11)),
+              ),
             for (var i = 0; i < firstWeekday; i++) const SizedBox(),
             for (var d = 1; d <= daysInMonth; d++)
-              _DayCell(
-                day: DateTime(_month.year, _month.month, d),
-                selected: _selected ==
-                    DateTime(_month.year, _month.month, d),
-                isToday: today.year == _month.year &&
-                    today.month == _month.month &&
-                    today.day == d,
-                entries: byDay[DateTime(_month.year, _month.month, d)] ??
-                    const [],
-                onTap: () => setState(() =>
-                    _selected = DateTime(_month.year, _month.month, d)),
-              ),
+              _dayCell(DateTime(_month.year, _month.month, d), byDay,
+                  today, p),
           ],
         ),
         const SizedBox(height: 20),
         Divider(color: p.hairline, height: 1),
         const SizedBox(height: 16),
-
-        // ---- 選択日の記録 ----
-        Text(
-          _dayLabel(context, _selected, l10n),
-          style: AppText.caption
-              .copyWith(color: p.textTertiary, fontWeight: FontWeight.w600),
-        ),
-        const SizedBox(height: 10),
-        if (dayEntries.isEmpty)
+        if (selectedData != null)
+          DayCard(day: selectedData, dogId: widget.dogId)
+        else
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 20),
             child: Text(l10n.noEntriesDay,
                 style: AppText.body.copyWith(color: p.textTertiary)),
-          )
-        else
-          for (final e in dayEntries) ...[
-            e.measurement != null
-                ? _HistoryRow(measurement: e.measurement!)
-                : _NoteRow(note: e.note!),
-            const SizedBox(height: 10),
-          ],
+          ),
       ],
     );
   }
 
-  static List<String> _weekdayLabels(String locale) {
-    final symbols = DateFormat.E(locale);
-    // 日曜はじまり (2023-01-01は日曜)
-    return [
-      for (var i = 0; i < 7; i++)
-        symbols.format(DateTime(2023, 1, 1 + i)),
-    ];
-  }
-}
-
-class _DayCell extends StatelessWidget {
-  const _DayCell({
-    required this.day,
-    required this.selected,
-    required this.isToday,
-    required this.entries,
-    required this.onTap,
-  });
-
-  final DateTime day;
-  final bool selected;
-  final bool isToday;
-  final List<_Entry> entries;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    // その日の測定の最悪レベル色を点に使う(日誌のみの日はアクセント)
+  Widget _dayCell(DateTime d, Map<DateTime, DayData> byDay,
+      DateTime today, AppPalette p) {
+    final data = byDay[d];
+    final selected = d == _selected;
     Color? dot;
-    for (final e in entries) {
-      if (e.measurement != null) {
-        final c =
-            HealthAssessment.levelForPpm(e.measurement!.avgPpm).color(p);
-        dot = c;
-      }
+    if (data != null) {
+      final s = dayStatusOf(data.measurements);
+      dot = s != null
+          ? dayStatusColor(s, p)
+          : p.accent.withOpacity(0.6);
     }
-    dot ??= entries.isNotEmpty ? p.accent.withOpacity(0.6) : null;
-
     return GestureDetector(
-      onTap: onTap,
+      onTap: () => setState(() => _selected = d),
       behavior: HitTestBehavior.opaque,
       child: Container(
         margin: const EdgeInsets.all(2),
         decoration: BoxDecoration(
           color: selected ? p.accentSoft : null,
           shape: BoxShape.circle,
-          border: isToday && !selected
+          border: d == today && !selected
               ? Border.all(color: p.hairline, width: 1.2)
               : null,
         ),
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Text(
-              '${day.day}',
-              style: AppText.caption.copyWith(
-                color: selected ? p.accent : p.textPrimary,
-                fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              ),
-            ),
+            Text('${d.day}',
+                style: AppText.caption.copyWith(
+                  color: selected ? p.accent : p.textPrimary,
+                  fontWeight:
+                      selected ? FontWeight.w700 : FontWeight.w500,
+                )),
             const SizedBox(height: 2),
             Container(
               width: 5,
               height: 5,
               decoration: BoxDecoration(
-                color: dot ?? Colors.transparent,
-                shape: BoxShape.circle,
-              ),
+                  color: dot ?? Colors.transparent,
+                  shape: BoxShape.circle),
             ),
           ],
         ),
@@ -453,250 +719,14 @@ class _DayCell extends StatelessWidget {
   }
 }
 
-// ─────────────────────────── 行ウィジェット ───────────────────────────
+/* ─────────────── 日付ラベル ─────────────── */
 
-/// 直近の平均値の推移(数値ラベルは最小限)。
-class _TrendChartCard extends StatelessWidget {
-  const _TrendChartCard({required this.items, required this.l10n});
-
-  final List<Measurement> items; // 新しい順
-  final AppLocalizations l10n;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final series = items.take(14).toList().reversed.toList();
-    final spots = [
-      for (var i = 0; i < series.length; i++)
-        FlSpot(i.toDouble(), series[i].avgPpm),
-    ];
-    final maxY = [
-      HealthAssessment.stableMaxPpm * 1.4,
-      ...series.map((m) => m.avgPpm * 1.15),
-    ].reduce((a, b) => a > b ? a : b);
-
-    return AppCard(
-      padding: const EdgeInsets.fromLTRB(20, 18, 20, 12),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(l10n.recentTrend.toUpperCase(),
-              style: AppText.overline.copyWith(color: p.textTertiary)),
-          const SizedBox(height: 14),
-          SizedBox(
-            height: 120,
-            child: LineChart(
-              LineChartData(
-                minY: 0,
-                maxY: maxY,
-                gridData: FlGridData(
-                  drawVerticalLine: false,
-                  horizontalInterval: maxY / 2,
-                  getDrawingHorizontalLine: (_) =>
-                      FlLine(color: p.hairline, strokeWidth: 1),
-                ),
-                titlesData: const FlTitlesData(show: false),
-                borderData: FlBorderData(show: false),
-                lineTouchData: const LineTouchData(enabled: false),
-                lineBarsData: [
-                  LineChartBarData(
-                    spots: spots,
-                    isCurved: true,
-                    curveSmoothness: 0.3,
-                    barWidth: 2,
-                    color: p.accent,
-                    dotData: FlDotData(
-                      show: true,
-                      checkToShowDot: (spot, _) =>
-                          spot.x == spots.last.x, // 最新点のみ
-                      getDotPainter: (_, __, ___, ____) =>
-                          FlDotCirclePainter(
-                        radius: 3,
-                        color: p.accent,
-                        strokeWidth: 2,
-                        strokeColor: p.card,
-                      ),
-                    ),
-                    belowBarData: BarAreaData(
-                      show: true,
-                      color: p.accent.withOpacity(0.06),
-                    ),
-                  ),
-                ],
-              ),
-              duration: const Duration(milliseconds: 400),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _HistoryRow extends StatelessWidget {
-  const _HistoryRow({required this.measurement});
-  final Measurement measurement;
-
-  @override
-  Widget build(BuildContext context) {
-    final l10n = AppLocalizations.of(context)!;
-    final p = context.palette;
-    final m = measurement;
-    final level = HealthAssessment.levelForPpm(m.avgPpm);
-    final locale = Localizations.localeOf(context).toLanguageTag();
-
-    return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      onTap: () => context.go(Routes.historyDetail, extra: m),
-      child: Row(
-        children: [
-          Container(
-            width: 8,
-            height: 8,
-            decoration: BoxDecoration(
-                color: level.color(p), shape: BoxShape.circle),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(level.shortLabel(l10n),
-                    style: AppText.bodyMedium
-                        .copyWith(color: p.textPrimary)),
-                const SizedBox(height: 2),
-                Text(
-                  DateFormat.Hm(locale).format(m.startedAt),
-                  style: AppText.caption.copyWith(color: p.textTertiary),
-                ),
-              ],
-            ),
-          ),
-          Text('${m.avgPpm.toStringAsFixed(1)} ${l10n.ppm}',
-              style: AppText.caption.copyWith(color: p.textTertiary)),
-          const SizedBox(width: 6),
-          Icon(Icons.chevron_right, size: 16, color: p.textTertiary),
-        ],
-      ),
-    );
-  }
-}
-
-/// 健康日誌の1行。タップで詳細(削除つき)シート。
-class _NoteRow extends ConsumerWidget {
-  const _NoteRow({required this.note});
-  final CareNote note;
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final l10n = AppLocalizations.of(context)!;
-    final p = context.palette;
-    final locale = Localizations.localeOf(context).toLanguageTag();
-    final rating = note.rating;
-
-    return AppCard(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      onTap: () => _showDetail(context, ref, l10n),
-      child: Row(
-        children: [
-          Icon(careNoteTypeIcon(note.type),
-              size: 18,
-              color: rating == CareRating.concern
-                  ? p.warn
-                  : p.textSecondary),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  rating == null
-                      ? careNoteTypeLabel(note.type, l10n)
-                      : '${careNoteTypeLabel(note.type, l10n)} · '
-                          '${careRatingLabel(rating, l10n)}',
-                  style: AppText.bodyMedium.copyWith(
-                      color: rating == CareRating.concern
-                          ? p.warn
-                          : p.textPrimary),
-                ),
-                if (note.memo.isNotEmpty) ...[
-                  const SizedBox(height: 2),
-                  Text(note.memo,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: AppText.caption
-                          .copyWith(color: p.textSecondary)),
-                ],
-              ],
-            ),
-          ),
-          Text(DateFormat.Hm(locale).format(note.at),
-              style: AppText.caption.copyWith(color: p.textTertiary)),
-        ],
-      ),
-    );
-  }
-
-  void _showDetail(
-      BuildContext context, WidgetRef ref, AppLocalizations l10n) {
-    final p = context.palette;
-    final locale = Localizations.localeOf(context).toLanguageTag();
-    showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: Colors.transparent,
-      builder: (sheetContext) => Container(
-        margin: const EdgeInsets.fromLTRB(10, 0, 10, 10),
-        padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-        decoration: BoxDecoration(
-          color: p.card,
-          borderRadius: BorderRadius.circular(24),
-        ),
-        child: SafeArea(
-          top: false,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(careNoteTypeIcon(note.type),
-                      size: 20, color: p.textSecondary),
-                  const SizedBox(width: 10),
-                  Text(
-                    note.rating == null
-                        ? careNoteTypeLabel(note.type, l10n)
-                        : '${careNoteTypeLabel(note.type, l10n)} · '
-                            '${careRatingLabel(note.rating!, l10n)}',
-                    style: AppText.title.copyWith(color: p.textPrimary),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                DateFormat.yMMMEd(locale).add_Hm().format(note.at),
-                style: AppText.caption.copyWith(color: p.textTertiary),
-              ),
-              if (note.memo.isNotEmpty) ...[
-                const SizedBox(height: 14),
-                Text(note.memo,
-                    style: AppText.body
-                        .copyWith(color: p.textPrimary, height: 1.6)),
-              ],
-              const SizedBox(height: 20),
-              TextButton(
-                onPressed: () {
-                  ref
-                      .read(careNoteControllerProvider.notifier)
-                      .delete(note.dogId, note.id);
-                  Navigator.of(sheetContext).pop();
-                },
-                child: Text(l10n.deleteRecord,
-                    style: AppText.bodyMedium.copyWith(color: p.danger)),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
+String _dayLabel(BuildContext context, DateTime d, AppLocalizations l10n) {
+  final locale = Localizations.localeOf(context).toLanguageTag();
+  final today = dayOf(DateTime.now());
+  final diff = today.difference(dayOf(d)).inDays;
+  if (diff == 0) return l10n.today;
+  if (diff == 1) return l10n.yesterday;
+  if (diff == 2) return l10n.dayBeforeYesterday;
+  return DateFormat.MMMEd(locale).format(d);
 }

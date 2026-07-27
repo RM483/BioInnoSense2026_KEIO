@@ -373,266 +373,6 @@ body {
   background: var(--accent-soft);
 }
 
-/* ==== ホーム大改修: Apple Health大見出し + CareKitカード構成 ==== */
-.home-head {
-  width: 100%;
-  padding: 4px 0 2px;
-}
-.home-head-kicker {
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.4px;
-  color: var(--text-tertiary);
-  text-transform: none;
-}
-.home-head-title {
-  margin: 2px 0 0;
-  font-size: 30px;
-  font-weight: 800;
-  letter-spacing: -0.8px;
-  color: var(--text-primary);
-}
-.hero-card {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 18px;
-  background: var(--card);
-  border-radius: 20px;
-  padding: 18px;
-  box-shadow: var(--shadow);
-  margin-top: 14px;
-}
-.hero-card .care-ring.hero-ring {
-  flex: none;
-  width: 118px;
-  height: 118px;
-}
-.hero-card .care-ring-rim {
-  width: 100px;
-  height: 100px;
-}
-.hero-card .care-ring-face {
-  width: 89px;
-  height: 89px;
-}
-.hero-words {
-  min-width: 0;
-  text-align: left;
-}
-.hero-words .dog-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--accent);
-}
-.hero-words .phrase {
-  margin: 3px 0 0;
-  text-wrap: balance;
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.3px;
-  color: var(--text-primary);
-}
-.hero-trend {
-  margin-top: 3px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--text-secondary);
-}
-.hero-words .action {
-  margin: 8px 0 0;
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--text-secondary);
-}
-.hero-words .last-measured {
-  margin-top: 6px;
-  font-size: 11.5px;
-  color: var(--text-tertiary);
-}
-.dog-pager.center {
-  width: 100%;
-  display: flex;
-  justify-content: center;
-  margin-top: 12px;
-}
-.trend-card {
-  width: 100%;
-  margin-top: 16px;
-  cursor: pointer;
-}
-.care-tasks {
-  margin-top: 22px;
-}
-.care-tasks .card-head .label.plain {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  text-transform: none;
-  color: var(--text-primary);
-}
-
-/* ==== ヒーローパネル: 深いMizuhaティール(ブランドの顔) ==== */
-.hero-panel {
-  width: 100%;
-  border-radius: 24px;
-  padding: 22px 22px 20px;
-  color: #fff;
-  background:
-    radial-gradient(120% 90% at 85% -10%, rgba(79, 184, 165, 0.5), transparent 60%),
-    linear-gradient(160deg, #11463f, #0e3b36 55%, #0b2f2b);
-  box-shadow: 0 12px 30px rgba(14, 59, 54, 0.22);
-  margin-top: 14px;
-}
-.hero-top {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-.hero-chip {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-  padding: 5px 12px;
-  border-radius: 100px;
-  font-size: 12.5px;
-  font-weight: 700;
-}
-.hero-last {
-  font-size: 11.5px;
-  color: rgba(255, 255, 255, 0.55);
-}
-.hero-phrase {
-  margin: 14px 0 0;
-  font-size: 26px;
-  font-weight: 800;
-  letter-spacing: -0.5px;
-  line-height: 1.25;
-  text-wrap: balance;
-}
-.hero-sub {
-  margin-top: 6px;
-  font-size: 13px;
-  font-weight: 600;
-  color: rgba(255, 255, 255, 0.75);
-}
-.hero-action {
-  margin-top: 10px;
-  font-size: 13.5px;
-  line-height: 1.6;
-  color: rgba(255, 255, 255, 0.8);
-}
-.hero-row {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin-top: 18px;
-}
-.hero-panel .care-ring.hero-ring {
-  width: 92px;
-  height: 92px;
-  flex: none;
-  background: rgba(255, 255, 255, 0.08);
-}
-.hero-panel .care-ring-rim {
-  width: 78px;
-  height: 78px;
-  border-width: 2px;
-}
-.hero-panel .care-ring-face {
-  width: 66px;
-  height: 66px;
-  background: rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.92);
-}
-.hero-cta {
-  flex: 1;
-  height: 54px;
-  border: none;
-  border-radius: 100px;
-  background: #fff;
-  color: #0e3b36;
-  font-size: 15px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18);
-  transition: transform 0.12s ease-out, opacity 0.2s ease;
-}
-.hero-cta:active { transform: scale(0.97); }
-.hero-cta:disabled { opacity: 0.7; }
-
-/* ==== きょうのケア — CareKit流デイリータスク (docs/22 §2) ====
- * header + タスク行 + 完了サークル。色に頼らず ✓ と文言で状態を伝える */
-.care-tasks {
-  width: 100%;
-  margin-top: 22px;
-}
-.task-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-top: 10px;
-}
-.task-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  min-height: 56px; /* タップ領域44px以上 */
-  padding: 10px 16px;
-  background: var(--card);
-  border: 1px solid var(--hairline);
-  border-radius: 16px;
-  text-align: left;
-  cursor: pointer;
-  transition: transform 0.12s ease-out, background 0.2s ease;
-}
-.task-row:active {
-  transform: scale(0.985);
-}
-/* CareKit本家のカード様式: 左=太いタイトル+詳細、右=大きな完了ボタン(ティント色) */
-.task-check {
-  flex: none;
-  order: 3;
-  margin-left: auto;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 2px solid color-mix(in srgb, var(--accent) 45%, transparent);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--on-accent);
-  transition: background 0.2s ease, transform 0.15s ease;
-}
-.task-row.done .task-check {
-  background: var(--accent);
-  border-color: var(--accent);
-}
-.task-row:active .task-check {
-  transform: scale(0.9);
-}
-.task-texts {
-  order: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  min-width: 0;
-}
-.task-label {
-  font-size: 16px;
-  font-weight: 700;
-  letter-spacing: -0.2px;
-  color: var(--text-primary);
-}
-.task-detail {
-  font-size: 12.5px;
-  color: var(--text-secondary);
-}
-.task-row.done .task-detail {
-  color: var(--accent);
-  font-weight: 600;
-}
-
 /* ここ7日のようす — 平置き(カードにしない) */
 .trend-flat {
   width: 100%;
@@ -1065,37 +805,6 @@ button:disabled { cursor: default; opacity: 0.4; }
 
 .tabbar.top { display: none; }
 
-/* 押下の瞬間に反応する — フィードバックはpointer-downに置く (docs/22 §1) */
-.tab:active {
-  transform: scale(0.94);
-  transition: transform 0.1s ease-out;
-}
-
-/* ==== A11yの3信号を独立に扱う (docs/22 §1 / Apple Design §14) ====
- * reduced-motionは既存の各所で処理済み。ここでは残り2つ:  */
-@media (prefers-reduced-transparency: reduce) {
-  /* 透明を嫌う設定 → ガラス(blurは.tabbar.bottomのみ)を不透明な面に */
-  .tabbar.bottom {
-    background: var(--bg);
-    backdrop-filter: none;
-    -webkit-backdrop-filter: none;
-  }
-}
-@media (prefers-contrast: more) {
-  /* 高コントラスト → 面の分離をヘアラインでなく明確な境界で */
-  .card,
-  .sheet {
-    border: 1.5px solid var(--text-secondary);
-  }
-  .tabbar.bottom {
-    border-top: 1.5px solid var(--text-secondary);
-  }
-  .btn.primary {
-    outline: 1.5px solid var(--text-primary);
-    outline-offset: -1.5px;
-  }
-}
-
 /* iPad / Mac: ヘッダ右のセグメントに */
 @media (min-width: 720px) {
   .tabbar.bottom { display: none; }
@@ -1506,8 +1215,6 @@ button:disabled { cursor: default; opacity: 0.4; }
   align-items: flex-end;
   justify-content: center;
   background: rgba(0, 0, 0, 0.32);
-  /* 背景は暗転で「集中するタスク」を伝える (docs/22 §1 材質と階層) */
-  animation: overlayIn 0.25s ease;
 }
 .sheet {
   width: 100%;
@@ -1520,21 +1227,6 @@ button:disabled { cursor: default; opacity: 0.4; }
   flex-direction: column;
   gap: 14px;
   box-shadow: var(--shadow);
-  /* 下から入場 = 下部シートの空間的な出自 (docs/22 §1 空間的一貫性)。
-   * イージングは臨界減衰スプリング近似(オーバーシュートなし)。 */
-  animation: sheetIn 0.34s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-@keyframes overlayIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-@keyframes sheetIn {
-  from { transform: translateY(28px); opacity: 0.6; }
-  to { transform: translateY(0); opacity: 1; }
-}
-@media (prefers-reduced-motion: reduce) {
-  /* 動きは消すが状況の変化は伝える — クロスフェードに置換 */
-  .sheet { animation: overlayIn 0.2s ease; }
 }
 .sheet-handle {
   width: 36px;
@@ -1875,3 +1567,193 @@ button:disabled { cursor: default; opacity: 0.4; }
   margin-left: auto;
   margin-right: auto;
 }
+
+/* ================================================================
+   IA v2.3 追加分 — 日付カード履歴 / きょうの記録まとめ入力
+   ================================================================ */
+
+/* ---- 日付カード (§7) ---- */
+.day-card { display: flex; flex-direction: column; gap: 14px; }
+.day-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.day-title {
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.2px;
+}
+.day-status {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  justify-content: flex-end;
+}
+.day-status .level-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+/* ---- …メニュー (§15) ---- */
+.card-menu-wrap { position: relative; }
+.menu-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+}
+.card-menu {
+  position: absolute;
+  right: 0;
+  top: 36px;
+  z-index: 6;
+  background: var(--card);
+  border-radius: 14px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14);
+  border: 1px solid var(--hairline);
+  min-width: 190px;
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+}
+.card-menu button {
+  background: none;
+  border: none;
+  text-align: left;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-primary);
+  padding: 12px 14px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.card-menu button:hover { background: var(--card-elevated); }
+.card-menu .danger-text { color: var(--danger); }
+
+/* ---- 測定の主表示 (§8,9) ---- */
+.measure-block {
+  background: var(--card-elevated);
+  border-radius: 14px;
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.measure-main {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.measure-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.measure-value {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.5px;
+  font-variant-numeric: tabular-nums;
+}
+.measure-value .unit {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.measure-time {
+  font-size: 13px;
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+.measure-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--warn);
+}
+.measure-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.measure-list { display: flex; flex-direction: column; gap: 6px; }
+.m-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13.5px;
+}
+.m-row .when { color: var(--text-tertiary); font-variant-numeric: tabular-nums; }
+.m-ppm { font-weight: 600; font-variant-numeric: tabular-nums; }
+.m-word { font-size: 12.5px; font-weight: 600; }
+.measure-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-tertiary);
+}
+
+/* ---- 健康日誌の行 (§13) ---- */
+.journal-rows { display: flex; flex-direction: column; gap: 8px; }
+.j-row {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.j-label {
+  flex: 0 0 44px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+.j-value { font-size: 14.5px; font-weight: 600; }
+.j-memo {
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+}
+
+/* ---- 自由メモ (§14) ---- */
+.memo-block {
+  border-top: 1px solid var(--hairline);
+  padding-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.memo-text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+}
+.memo-text.clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* ---- きょうの記録シート (§5) ---- */
+.select-chip { position: relative; }
+.select-chip.filled { color: var(--text-primary); }
+.filled-dot {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: 6px;
+  vertical-align: 2px;
+}
+.chip-row.choice-grid { gap: 8px; }
+.chip-row.choice-grid .select-chip.wide {
+  flex: 1 1 calc(50% - 8px);
+  text-align: center;
+}
+.link-btn.center { align-self: center; }

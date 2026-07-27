@@ -33,11 +33,6 @@ import {
   type HealthLevel,
 } from './lib/assessment'
 import type { Dog } from './lib/dogs'
-import {
-  type CareNote,
-  noteTypeLabel,
-  ratingLabel,
-} from './lib/careNotes'
 
 /* ================= ホーム ================= */
 
@@ -53,14 +48,12 @@ export function HomeView(props: {
   dogs: Dog[] // 見守り中の犬のみ
   index: number
   historyFor: (dogId: string) => SessionSummary[]
-  notesFor: (dogId: string) => CareNote[] // きょうの日誌 (ケアタスク用)
   conn: ConnectionStatus
   busy: boolean
   onIndex: (i: number) => void
   onStart: (dog: Dog) => void
   onOpenHistory: () => void
   onAddNote: () => void
-  onQuickNote: (type: CareNote['type']) => void
   onRegisterDog: () => void
 }) {
   const railRef = useRef<HTMLDivElement>(null)
@@ -120,11 +113,8 @@ export function HomeView(props: {
 
   return (
     <div className="view home-canvas full">
-      {/* ---- Apple Health流の大見出し: 小さな挨拶 + 太い日付 ---- */}
-      <div className="home-head">
-        <div className="home-head-kicker">{greeting()}</div>
-        <h1 className="home-head-title">{todayLabel()}</h1>
-      </div>
+      {/* ---- 固定ヘッダー: 挨拶 + 日付 (犬に依存しない) ---- */}
+      <div className="greeting">{greeting()} · {todayLabel()}</div>
 
       {/* ---- 犬ごとのページ(全体がスライド §2) ---- */}
       <div className="home-rail" ref={railRef} onScroll={onScroll}>
@@ -133,7 +123,6 @@ export function HomeView(props: {
             key={dog.id}
             dog={dog}
             history={props.historyFor(dog.id)}
-            todayNotes={props.notesFor(dog.id)}
             pageIndex={i}
             pageCount={props.dogs.length}
             conn={props.conn}
@@ -141,7 +130,6 @@ export function HomeView(props: {
             onStart={() => props.onStart(dog)}
             onOpenHistory={props.onOpenHistory}
             onAddNote={props.onAddNote}
-            onQuickNote={props.onQuickNote}
           />
         ))}
       </div>
@@ -153,7 +141,6 @@ export function HomeView(props: {
 function DogHomePage(props: {
   dog: Dog
   history: SessionSummary[]
-  todayNotes: CareNote[]
   pageIndex: number
   pageCount: number
   conn: ConnectionStatus
@@ -161,7 +148,6 @@ function DogHomePage(props: {
   onStart: () => void
   onOpenHistory: () => void
   onAddNote: () => void
-  onQuickNote: (type: CareNote['type']) => void
 }) {
   const { dog, history } = props
   const a = assess(history)
@@ -170,70 +156,57 @@ function DogHomePage(props: {
 
   return (
     <div className="home-page stack">
-      {/* ---- ヒーローパネル: 深いMizuhaティール — ブランドの顔 ----
-       * 濃色パネル×紙色カャンバス(Oura/Fitness+の構成)。状態はリングの
-       * 縁色とチップで、行動はパネル内の白CTAで完結する。 */}
-      <section className="hero-panel">
-        <div className="hero-top">
-          <span className="hero-chip">{dog.name}</span>
-          {a.latest && (
-            <span className="hero-last">
-              最終測定 · {relativeTime(a.latest.startedAt)}
-            </span>
-          )}
-        </div>
-        <h2 className="hero-phrase">{levelPhrase[a.level]}</h2>
-        {trend && <div className="hero-sub">{trend}</div>}
-        <p className="hero-action">{actionLabel(a)}</p>
-        <div className="hero-row">
-          <button
-            className="care-ring hero-ring"
-            onClick={props.onStart}
-            aria-label={`${dog.name}の測定をはじめる`}
-          >
-            <span
-              className="care-ring-rim"
-              style={{ borderColor: `color-mix(in srgb, ${color} 80%, white)` }}
-            >
-              <span className="care-ring-face">
-                {dog.photo ? (
-                  <img src={dog.photo} alt="" className="dog-photo" />
-                ) : (
-                  <PawIcon size={34} />
-                )}
-              </span>
-            </span>
-          </button>
-          <button
-            className="hero-cta"
-            onClick={props.onStart}
-            disabled={props.busy || props.conn === 'connecting'}
-          >
-            {props.conn === 'connecting'
-              ? '接続しています…'
-              : `${dog.name}の測定をはじめる`}
-          </button>
-        </div>
-      </section>
-
-      {props.pageCount > 1 && (
-        <div className="dog-pager center"
-          aria-label={`${props.pageIndex + 1} / ${props.pageCount}頭目`}>
-          <span className="dots">
-            {Array.from({ length: props.pageCount }).map((_, i) => (
-              <span key={i}
-                className={`dot ${i === props.pageIndex ? 'on' : ''}`} />
-            ))}
+      {/* ---- 見守りリング (主役 / docs/16 案B。写真があれば表示 §6) ---- */}
+      <button
+        className="care-ring"
+        style={{ background: `color-mix(in srgb, ${color} 7%, transparent)` }}
+        onClick={props.onStart}
+        aria-label={`${dog.name}の測定をはじめる`}
+      >
+        <span
+          className="care-ring-rim"
+          style={{ borderColor: `color-mix(in srgb, ${color} 55%, transparent)` }}
+        >
+          <span className="care-ring-face">
+            {dog.photo ? (
+              <img src={dog.photo} alt="" className="dog-photo" />
+            ) : (
+              <PawIcon size={62} />
+            )}
           </span>
-          <span className="pager-count">
-            {props.pageIndex + 1} / {props.pageCount}
-          </span>
-        </div>
-      )}
+        </span>
+      </button>
 
-      {/* ---- ここ7日のようす — CareKitチャートカード ---- */}
+      {/* ---- どの犬か一目で分かる: 名前 + ドット + 1/N (§2) ---- */}
+      <div className="home-words">
+        <div className="dog-label">{dog.name}</div>
+        {props.pageCount > 1 && (
+          <div className="dog-pager"
+            aria-label={`${props.pageIndex + 1} / ${props.pageCount}頭目`}>
+            <span className="dots">
+              {Array.from({ length: props.pageCount }).map((_, i) => (
+                <span key={i}
+                  className={`dot ${i === props.pageIndex ? 'on' : ''}`} />
+              ))}
+            </span>
+            <span className="pager-count">
+              {props.pageIndex + 1} / {props.pageCount}
+            </span>
+          </div>
+        )}
+        <h2 className="phrase">{levelPhrase[a.level]}</h2>
+        {trend && <div className="trend-line-label center">{trend}</div>}
+        <p className="action">{actionLabel(a)}</p>
+        {a.latest && (
+          <div className="last-measured center">
+            最終測定 · {relativeTime(a.latest.startedAt)}
+          </div>
+        )}
+      </div>
+
+      {/* ---- ここ7日のようす ---- */}
       {history.length >= 2 && (
-        <section className="card trend-card" onClick={props.onOpenHistory} role="button">
+        <section className="trend-flat" onClick={props.onOpenHistory} role="button">
           <div className="card-head">
             <span className="label plain">ここ7日のようす</span>
             <StatusChip level={a.level} />
@@ -243,19 +216,17 @@ function DogHomePage(props: {
         </section>
       )}
 
-      {/* ---- きょうのケア: Task→Outcome を1日の単位で可視化 ----
-       * CareKitのデイリータスクカード様式 (docs/22 §2)。
-       * 完了サークルが「済んだ/まだ」を色に頼らず伝える。 */}
-      <CareTasks
-        history={history}
-        todayNotes={props.todayNotes}
-        onStart={props.onStart}
-        onOpenHistory={props.onOpenHistory}
-        onQuickNote={props.onQuickNote}
-      />
-
-      {/* ---- 副導線 (主CTAはヒーローパネル内へ移動) ---- */}
+      {/* ---- 1段目: 大きな主CTA (§1) / 2段目: 副導線 ---- */}
       <div className="controls home-cta">
+        <button
+          className="btn primary main-cta"
+          onClick={props.onStart}
+          disabled={props.busy || props.conn === 'connecting'}
+        >
+          {props.conn === 'connecting'
+            ? '接続しています…'
+            : `${dog.name}の測定をはじめる`}
+        </button>
         <div className="quiet-links">
           <button className="quiet-link" onClick={props.onOpenHistory}>
             <BookIcon size={17} />
@@ -271,96 +242,6 @@ function DogHomePage(props: {
     </div>
   )
 }
-
-/** きょうのケア — CareKit流デイリータスク (docs/22 §2)。
- *  Task(やること) と Outcome(今日の結果) を分離して考え、
- *  Outcomeの有無を完了サークルで示す。未完了もタップ1回で記録へ。 */
-function CareTasks(props: {
-  history: SessionSummary[]
-  todayNotes: CareNote[]
-  onStart: () => void
-  onOpenHistory: () => void
-  onQuickNote: (type: CareNote['type']) => void
-}) {
-  const measuredToday = props.history.some((h) =>
-    isToday(new Date(h.startedAt)),
-  )
-  const lastToday = props.history.find((h) => isToday(new Date(h.startedAt)))
-  const noteOf = (t: CareNote['type']) =>
-    props.todayNotes.find((n) => n.type === t)
-
-  const rows: {
-    key: string
-    label: string
-    detail: string
-    done: boolean
-    onTap: () => void
-  }[] = [
-    {
-      key: 'measure',
-      label: '呼気の測定',
-      detail: measuredToday
-        ? `済み · ${timeOf(lastToday!.startedAt)}`
-        : '1日1回 · 3分ほど',
-      done: measuredToday,
-      onTap: measuredToday ? props.onOpenHistory : props.onStart,
-    },
-    ...(['walk', 'appetite', 'medicine'] as const).map((t) => {
-      const n = noteOf(t)
-      return {
-        key: t,
-        label: noteTypeLabel(t),
-        detail: n
-          ? `済み · ${timeOf(n.at)}${n.rating ? ` · ${ratingLabel(n.rating)}` : ''}`
-          : 'タップで記録',
-        done: !!n,
-        onTap: () => props.onQuickNote(t),
-      }
-    }),
-  ]
-
-  return (
-    <section className="care-tasks">
-      <div className="card-head">
-        <span className="label plain">きょうのケア</span>
-        <span className="aside">
-          {rows.filter((r) => r.done).length} / {rows.length}
-        </span>
-      </div>
-      <div className="task-list">
-        {rows.map((r) => (
-          <button
-            key={r.key}
-            className={`task-row ${r.done ? 'done' : ''}`}
-            onClick={r.onTap}
-            aria-label={`${r.label} — ${r.detail}`}
-          >
-            <span className="task-check" aria-hidden="true">
-              {r.done && <CheckIcon size={15} />}
-            </span>
-            <span className="task-texts">
-              <span className="task-label">{r.label}</span>
-              <span className="task-detail">{r.detail}</span>
-            </span>
-          </button>
-        ))}
-      </div>
-    </section>
-  )
-}
-
-const isToday = (d: Date): boolean => {
-  const now = new Date()
-  return (
-    d.getFullYear() === now.getFullYear() &&
-    d.getMonth() === now.getMonth() &&
-    d.getDate() === now.getDate()
-  )
-}
-
-const timeOf = (iso: string): string =>
-  new Intl.DateTimeFormat('ja-JP', { hour: '2-digit', minute: '2-digit' })
-    .format(new Date(iso))
 
 function greeting(): string {
   const h = new Date().getHours()
