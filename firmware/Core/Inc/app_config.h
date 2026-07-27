@@ -14,18 +14,23 @@
 #define CFG_SENSOR_CONFIRM_MS        1500U  /* 連続開始後の初回データ確認窓 */
 #define CFG_STOP_CONFIRM_MS          1800U  /* 連続停止後もデータが続く場合の再トグル猶予 */
 #define CFG_SENSOR_RETRY_MAX         3U
-/* IDLE→自動Sleep。注: 現行HWはSTOP2からBLE(UART4)で復帰できない
- * (Wake源はUSART2のみ)ため、実機BLEテスト/デモ中は長めに設定する。
- * 量産向けに短縮する場合はUART4のStopモードWake対応が先。 */
-#define CFG_IDLE_TO_SLEEP_MS         600000U /* 10分 (テスト/デモ用) */
-#define CFG_BLE_INACTIVITY_MS        60000U /* 測定中の無通信→自動停止 */
-#define CFG_ERROR_TO_SLEEP_MS        60000U /* ERROR滞在の上限→省電力Sleepへ */
+/* ==== 電源プロファイル: USB常時給電 (0=無効) ====
+ * 現行HWはSTOP2からBLE(UART4)で復帰できない(Wake源はUSART2のみ)ため、
+ * USB給電運用では自動Sleep/自動停止をすべて無効化し、常時可達とする。
+ * コイン電池運用へ戻す場合はUART4のStopモードWake対応を実装した上で
+ * 旧値(10000/60000/60000)を復元すること。 */
+#define CFG_IDLE_TO_SLEEP_MS         0U /* IDLE→自動Sleep。0=無効 */
+#define CFG_BLE_INACTIVITY_MS        0U /* 測定中の無通信→自動停止。0=無効 */
+#define CFG_ERROR_TO_SLEEP_MS        0U /* ERROR→省電力Sleep。0=無効 */
 #ifdef HYDROPAW_SIM_SENSOR
 #define CFG_WARMUP_MS                5000U  /* 擬似測定時のみ短縮(実機フローの短時間再現) */
 #else
 #define CFG_WARMUP_MS                60000U /* ウォームアップ扱い期間 */
 #endif
-#define CFG_MEASURE_MAX_MS           1800000U /* 連続測定の上限30分 */
+#define CFG_MEASURE_MAX_MS           1800000U /* 呼気セッションの安全弁30分 */
+/* ラボ連続測定の上限。0=無制限。USB給電運用のため無制限とする
+ * (コイン電池運用に戻す場合は 1800000U 等へ)。 */
+#define CFG_CONT_MAX_MS              0U
 
 /* 電池 [mV] (VBAT = ADC×2 分圧) */
 #define CFG_BATT_LOW_MV              3300U  /* これ未満でE_LOW_BATTERY通知 */

@@ -229,42 +229,59 @@ static void test_start_confirm_retry_ladder(void)
 
 static void test_ble_inactivity_stops_and_sleeps(void)
 {
+    /* CFG_BLE_INACTIVITY_MS=0(無効, USB給電運用): BLE無通信でも測定継続。
+     * 0以外: 無通信でサマリ送信→Sleep。 */
     setup(0);
     sm_on_sensor_line(&g_sm, VALID_LINE, 100);
     uint8_t iv = 1;
     inject_cmd(HPP_CMD_START_CONT, &iv, 1, 200);
 
     /* センサデータは来続けるがBLEは無通信 */
+    uint32_t inactivity =
+        (CFG_BLE_INACTIVITY_MS != 0U) ? CFG_BLE_INACTIVITY_MS : 300000U;
     uint32_t now = 200;
-    while (now < 200 + CFG_BLE_INACTIVITY_MS + 2000) {
+    while (now < 200 + inactivity + 2000) {
         now += 1000;
         sm_on_sensor_line(&g_sm, VALID_LINE, now);
         sm_tick(&g_sm, now);
     }
-    ASSERT_EQ(g_sm.state, SM_SLEEP);
-    ASSERT_TRUE(g_sm.sleep_requested);
-    ASSERT_TRUE(last_frame_of(HPP_EVT_SUMMARY) != NULL);
-    /* DGS2にもSleep('s')が送られている */
-    ASSERT_TRUE(g_sensor_tx[g_sensor_tx_len - 1] == 's');
+    if (CFG_BLE_INACTIVITY_MS != 0U) {
+        ASSERT_EQ(g_sm.state, SM_SLEEP);
+        ASSERT_TRUE(g_sm.sleep_requested);
+        ASSERT_TRUE(last_frame_of(HPP_EVT_SUMMARY) != NULL);
+        /* DGS2にもSleep('s')が送られている */
+        ASSERT_TRUE(g_sensor_tx[g_sensor_tx_len - 1] == 's');
+    } else {
+        ASSERT_EQ(g_sm.state, SM_MEASURING); /* 無効: 止まらない */
+    }
 }
 
-static void test_session_cap_30min(void)
+static void test_session_cap(void)
 {
+    /* CFG_CONT_MAX_MS=0(無制限, USB給電運用): 旧上限30分を超えても
+     * keep-aliveがある限り連続測定が停止しないこと。
+     * 0以外に設定した場合は上限で自動停止しサマリが出ること。 */
     setup(0);
     sm_on_sensor_line(&g_sm, VALID_LINE, 100);
     uint8_t iv = 1;
     inject_cmd(HPP_CMD_START_CONT, &iv, 1, 200);
 
+    uint32_t limit = (CFG_CONT_MAX_MS != 0U) ? CFG_CONT_MAX_MS
+                                             : CFG_MEASURE_MAX_MS;
     uint32_t now = 200;
-    while (now < CFG_MEASURE_MAX_MS + 5000 && g_sm.state == SM_MEASURING) {
+    while (now < limit + 5000 && g_sm.state == SM_MEASURING) {
         now += 1000;
         reset_capture(); /* 長時間ループでの捕捉バッファ溢れを防ぐ */
         sm_on_sensor_line(&g_sm, VALID_LINE, now);
         inject_cmd(HPP_CMD_GET_STATUS, NULL, 0, now); /* keep-alive */
         sm_tick(&g_sm, now);
     }
-    ASSERT_EQ(g_sm.state, SM_IDLE);
-    ASSERT_TRUE(last_frame_of(HPP_EVT_SUMMARY) != NULL);
+    if (CFG_CONT_MAX_MS != 0U) {
+        ASSERT_EQ(g_sm.state, SM_IDLE);
+        ASSERT_TRUE(last_frame_of(HPP_EVT_SUMMARY) != NULL);
+    } else {
+        ASSERT_EQ(g_sm.state, SM_MEASURING); /* 無制限: 止まらない */
+    }
 }
 
 static void test_sleep_wake_via_frame(void)
@@ -287,15 +304,24 @@ static void test_sleep_wake_via_frame(void)
 
 static void test_idle_auto_sleep(void)
 {
+    /* CFG_IDLE_TO_SLEEP_MS=0(無効, USB給電運用): IDLEに留まり続ける */
     setup(0);
     sm_on_sensor_line(&g_sm, VALID_LINE, 100);
-    sm_tick(&g_sm, 100 + CFG_IDLE_TO_SLEEP_MS + 1);
-    ASSERT_EQ(g_sm.state, SM_SLEEP);
-    ASSERT_TRUE(g_sm.sleep_requested);
+    uint32_t wait = (CFG_IDLE_TO_SLEEP_MS != 0U) ? CFG_IDLE_TO_SLEEP_MS
+                                                 : 3600000U;
+    sm_tick(&g_sm, 100 + wait + 1);
+    if (CFG_IDLE_TO_SLEEP_MS != 0U) {
+        ASSERT_EQ(g_sm.state, SM_SLEEP);
+        ASSERT_TRUE(g_sm.sleep_requested);
+    } else {
+        ASSERT_EQ(g_sm.state, SM_IDLE); /* 無効: 常時可達 */
+    }
 }
 
 static void test_error_auto_sleep(void)
 {
+    /* CFG_ERROR_TO_SLEEP_MS=0(無効, USB給電運用): ERRORに留まり
+     * BLE(CMD_WAKE)からの復旧を待ち続ける */
     setup(0);
     uint32_t now = 0;
     for (int i = 0; i < 4; i++) {
@@ -303,8 +329,14 @@ static void test_error_auto_sleep(void)
         sm_tick(&g_sm, now);
     }
     ASSERT_EQ(g_sm.state, SM_ERROR);
-    sm_tick(&g_sm, now + CFG_ERROR_TO_SLEEP_MS + 1);
-    ASSERT_EQ(g_sm.state, SM_SLEEP); /* 電池保護 */
+    uint32_t wait = (CFG_ERROR_TO_SLEEP_MS != 0U) ? CFG_ERROR_TO_SLEEP_MS
+                                                  : 3600000U;
+    sm_tick(&g_sm, now + wait + 1);
+    if (CFG_ERROR_TO_SLEEP_MS != 0U) {
+        ASSERT_EQ(g_sm.state, SM_SLEEP); /* 電池保護 */
+    } else {
+        ASSERT_EQ(g_sm.state, SM_ERROR); /* 無効: 復旧待機 */
+    }
 }
 
 static void test_error_recovery_via_wake_sends_reset(void)
@@ -636,7 +668,7 @@ int main(void)
     test_measuring_emits_data_and_summary();
     test_start_confirm_retry_ladder();
     test_ble_inactivity_stops_and_sleeps();
-    test_session_cap_30min();
+    test_session_cap();
     test_sleep_wake_via_frame();
     test_idle_auto_sleep();
     test_error_auto_sleep();

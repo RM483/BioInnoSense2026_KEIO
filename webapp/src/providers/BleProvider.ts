@@ -132,6 +132,11 @@ export class BleProvider implements DataProvider {
     return summary
   }
 
+  /** ゼロ校正。FWはIDLE時のみ受理(測定中はNAK E_BUSY)。 */
+  async zeroCalibrate(): Promise<void> {
+    await this.send(HPP.cmdZero)
+  }
+
   onSample(cb: (s: SensorSample) => void): Unsubscribe {
     this.sampleListeners.add(cb)
     return () => this.sampleListeners.delete(cb)

@@ -8,15 +8,17 @@
 import 'package:flutter_blue_plus/flutter_blue_plus.dart';
 
 abstract final class BleUuids {
-  /// Nordic UART Service (R4 arduino_fis と一致)
-  static final service = Guid('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+  /// STM32+AC02実機用 (2026-07-20 実機確認済み / webapp BleProvider と一致)。
+  /// Arduino R4(NUS)変種でテストする時は Fuwan/6e400001... へ戻すこと。
+  static final service = Guid('442f1570-8a00-9a28-cbe1-e1d4212d53eb');
 
   /// FW→App (Notify)
-  static final tx = Guid('6e400003-b5a3-f393-e0a9-e50e24dcca9e');
+  static final tx = Guid('442f1571-8a00-9a28-cbe1-e1d4212d53eb');
 
   /// App→FW (Write / Write Without Response)
-  static final rx = Guid('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+  static final rx = Guid('442f1572-8a00-9a28-cbe1-e1d4212d53eb');
 
-  /// Advertising名のprefix (スキャンフィルタに使用)。R4は "Fuwan-R4" で広告する。
-  static const namePrefix = 'Fuwan';
+  /// Advertising名のprefix。AC02はService UUIDを広告せず
+  /// 既定名 "Leaf_A_#<id>" で広告するため名前prefixで絞る。
+  static const namePrefix = 'Leaf_A';
 }

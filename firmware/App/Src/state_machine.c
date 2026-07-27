@@ -546,7 +546,8 @@ void sm_tick(sm_t *sm, uint32_t now)
 
     case SM_IDLE:
         check_battery(sm, now);
-        if (now - sm->last_ble_rx_ms > CFG_IDLE_TO_SLEEP_MS &&
+        if (CFG_IDLE_TO_SLEEP_MS != 0U &&
+            now - sm->last_ble_rx_ms > CFG_IDLE_TO_SLEEP_MS &&
             now - sm->state_since_ms > CFG_IDLE_TO_SLEEP_MS) {
             enter_sleep(sm, now); /* 省電力: 無通信で自動Sleep */
         }
@@ -581,15 +582,16 @@ void sm_tick(sm_t *sm, uint32_t now)
                 }
             }
         }
-        /* BLE無通信(切断相当)60s → 安全停止 (ラボモードのみ。
+        /* BLE無通信(切断相当) → 安全停止 (ラボモードのみ。0=無効。
          * 呼気モードは切断中も継続しARQで後送する — docs/18 §3) */
-        if (now - sm->last_ble_rx_ms > CFG_BLE_INACTIVITY_MS) {
+        if (CFG_BLE_INACTIVITY_MS != 0U &&
+            now - sm->last_ble_rx_ms > CFG_BLE_INACTIVITY_MS) {
             stop_measurement(sm, now, true);
             enter_sleep(sm, now);
         }
-        /* セッション上限 */
-        if (sm->state == SM_MEASURING &&
-            now - sm->stats.start_ms > CFG_MEASURE_MAX_MS) {
+        /* セッション上限 (CFG_CONT_MAX_MS=0なら無制限 — USB給電運用) */
+        if (CFG_CONT_MAX_MS != 0U && sm->state == SM_MEASURING &&
+            now - sm->stats.start_ms > CFG_CONT_MAX_MS) {
             stop_measurement(sm, now, true);
         }
         break;
@@ -670,7 +672,8 @@ void sm_tick(sm_t *sm, uint32_t now)
     case SM_ERROR:
         /* ERRORのまま放置で電池を消耗しない: 一定時間後にSleepへ。
          * BLE経由のCMD_WAKEでいつでも復帰試行できる。 */
-        if (now - sm->state_since_ms > CFG_ERROR_TO_SLEEP_MS) {
+        if (CFG_ERROR_TO_SLEEP_MS != 0U &&
+            now - sm->state_since_ms > CFG_ERROR_TO_SLEEP_MS) {
             enter_sleep(sm, now);
         }
         break;

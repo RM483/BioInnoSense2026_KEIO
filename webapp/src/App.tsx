@@ -160,6 +160,20 @@ export default function App() {
     setDogState(n)
   }, [])
 
+  // ---- ゼロ校正 (実機BLEのみ。FWはIDLE時のみ受理) ----
+  const zeroCalibrate = useCallback(async () => {
+    if (!provider.zeroCalibrate) return
+    setBusy(true)
+    try {
+      await provider.zeroCalibrate()
+      showNotice('ゼロ校正コマンドを送信しました')
+    } catch {
+      showNotice('ゼロ校正を送信できませんでした。接続を確認してください')
+    } finally {
+      setBusy(false)
+    }
+  }, [provider, showNotice])
+
   // ---- 測定フロー ----
   /** CTA → 対象犬の確認シート (§3) */
   const requestMeasurement = useCallback(() => {
@@ -496,6 +510,7 @@ export default function App() {
             localStorage.removeItem(HISTORY_KEY)
             setHistory([])
           }}
+          onZeroCalibrate={provider.zeroCalibrate ? zeroCalibrate : undefined}
         />
       )}
 

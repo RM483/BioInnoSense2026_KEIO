@@ -390,6 +390,8 @@ export function SettingsView(props: {
   onConnect: () => void
   onDisconnect: () => void
   onClearHistory: () => void
+  /** ゼロ校正 (実機BLEのみ。未対応Providerでは省略しボタン非表示) */
+  onZeroCalibrate?: () => void
 }) {
   const { conn, latest } = props
   return (
@@ -423,6 +425,25 @@ export function SettingsView(props: {
               {props.providerName === 'Mock' ? 'デモ (実機なし)' : 'Bluetooth'}
             </span>
           </div>
+          {props.onZeroCalibrate && (
+            <div className="row">
+              <span className="k">ゼロ校正</span>
+              <button
+                className="linklike"
+                disabled={conn !== 'connected' || props.busy}
+                onClick={() => {
+                  if (
+                    confirm(
+                      'ゼロ校正を実行しますか?\n\n・きれいな空気の場所で行ってください\n・センサを長時間通電し、値が安定してから実行してください\n・測定中は実行できません(先に測定を終了)',
+                    )
+                  )
+                    props.onZeroCalibrate!()
+                }}
+              >
+                実行
+              </button>
+            </div>
+          )}
         </div>
         <div className="controls" style={{ marginTop: 16 }}>
           {conn === 'connected' ? (

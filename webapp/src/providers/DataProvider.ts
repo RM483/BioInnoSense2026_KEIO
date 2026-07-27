@@ -50,6 +50,10 @@ export interface DataProvider {
 
   onSample(cb: (s: SensorSample) => void): Unsubscribe
   onConnection(cb: (c: ConnectionStatus) => void): Unsubscribe
+
+  /** ゼロ校正('Z' / HPP_CMD_ZERO)。清浄大気・センサ安定後・非測定中(IDLE)のみ。
+   *  実機(BLE)のみ対応 — 未実装のProviderではUIにボタンを出さない。 */
+  zeroCalibrate?(): Promise<void>
 }
 
 export const H2_HIGH_PPM = 20.0
