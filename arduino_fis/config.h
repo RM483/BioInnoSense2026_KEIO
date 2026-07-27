@@ -37,6 +37,12 @@
 #define SAMPLE_PERIOD_MS  100U            /* 10Hz。RCフィルタ後の平滑値を取る */
 #define BLE_STREAM_DIV    5U              /* EVT_DATAは 10Hz/5 = 2Hz で送信 */
 
+/* ---------- センサ無しデモ (SIMモード) ----------
+ * 1: FISセンサ/読み出し回路が無くても合成Rsカーブを流し、R4単体で
+ *    解析→HPP→BLE→アプリ の全経路を確認できる(STM32版simと同じ発想)。
+ * 実機のFISセンサで測定する時は 0 に戻すこと。 */
+#define FIS_SIM_SENSOR    1
+
 /* ---------- BAP-lite しきい値 (PROVISIONAL: 実犬較正前) ----------
  * 信号は response r = R0/Rs (清浄大気で ~1.0、H2上昇でRs減→r増)。 */
 #define BAP_WARMUP_MS         120000U     /* 予熱扱い。実運用はもっと長い(データシート予備通電48h) */

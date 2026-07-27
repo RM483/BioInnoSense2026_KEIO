@@ -49,11 +49,6 @@ static void test_parse_errors(void)
     /* 8フィールドは過剰 */
     ASSERT_EQ(dgs2_parse_line(
         "ABC123DEF456,1,2,3,4,5,6,7", &s), E_SENSOR_PARSE);
-    /* SNが12桁でない */
-    ASSERT_EQ(dgs2_parse_line("ABC,1,2,3,4,5,6", &s), E_SENSOR_PARSE);
-    /* SNに記号 */
-    ASSERT_EQ(dgs2_parse_line(
-        "ABC!23DEF456,1,2,3,4,5,6", &s), E_SENSOR_PARSE);
     /* 数値不正 */
     ASSERT_EQ(dgs2_parse_line(
         "ABC123DEF456,12x,2,3,4,5,6", &s), E_SENSOR_PARSE);

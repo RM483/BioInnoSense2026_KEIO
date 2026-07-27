@@ -24,11 +24,13 @@ import {
   readEvtSummary,
 } from './hpp'
 
-// Nordic UART Service (R4 arduino_fis/config.h と一致)
-const SERVICE_UUID = '6e400001-b5a3-f393-e0a9-e50e24dcca9e'
-const TX_UUID = '6e400003-b5a3-f393-e0a9-e50e24dcca9e' // FW→App Notify
-const RX_UUID = '6e400002-b5a3-f393-e0a9-e50e24dcca9e' // App→FW Write
-const NAME_PREFIX = 'Fuwan'
+// STM32+AC02実機テスト用 (main側の実機確認済みUUID 2026-07-20)。
+// Arduino R4(NUS)でテストする時は Fuwan/6e400001... に戻すこと。
+const SERVICE_UUID = '442f1570-8a00-9a28-cbe1-e1d4212d53eb'
+const TX_UUID = '442f1571-8a00-9a28-cbe1-e1d4212d53eb' // FW→App Notify
+const RX_UUID = '442f1572-8a00-9a28-cbe1-e1d4212d53eb' // App→FW Write
+// AC02はService UUIDを広告せず既定名 "Leaf_A_#<id>" で広告する
+const NAME_PREFIX = 'Leaf_A'
 
 export class BleProvider implements DataProvider {
   readonly name = 'BLE'
@@ -58,9 +60,10 @@ export class BleProvider implements DataProvider {
         optionalServices: [SERVICE_UUID],
       })
       this.device = device
-      device.addEventListener('gattserverdisconnected', () =>
-        this.notifyConn('disconnected'),
-      )
+      device.addEventListener('gattserverdisconnected', () => {
+        this.stopKeepalive()
+        this.notifyConn('disconnected')
+      })
 
       const server = await device.gatt!.connect()
       const service = await server.getPrimaryService(SERVICE_UUID)
@@ -81,16 +84,36 @@ export class BleProvider implements DataProvider {
   }
 
   async disconnect(): Promise<void> {
+    this.stopKeepalive()
     this.device?.gatt?.disconnect()
     this.device = null
     this.rxChar = null
     this.notifyConn('disconnected')
   }
 
+  /** FWは無通信60秒(CFG_BLE_INACTIVITY_MS)で測定を自動停止するため、
+   *  測定中は20秒毎にGET_STATUSを送って接続維持を通知する(電池情報も更新される) */
+  private keepaliveId: ReturnType<typeof setInterval> | null = null
+
+  private startKeepalive() {
+    this.stopKeepalive()
+    this.keepaliveId = setInterval(() => {
+      void this.send(HPP.cmdGetStatus).catch(() => {})
+    }, 20000)
+  }
+
+  private stopKeepalive() {
+    if (this.keepaliveId !== null) {
+      clearInterval(this.keepaliveId)
+      this.keepaliveId = null
+    }
+  }
+
   async startMeasurement(): Promise<void> {
     this.sessionStart = new Date()
     this.measuring = true
     await this.send(HPP.cmdStartCont, [1])
+    this.startKeepalive()
   }
 
   async stopMeasurement(): Promise<SessionSummary | null> {
@@ -103,6 +126,7 @@ export class BleProvider implements DataProvider {
         }
       }, 3000)
     })
+    this.stopKeepalive()
     await this.send(HPP.cmdStop)
     this.measuring = false
     return summary

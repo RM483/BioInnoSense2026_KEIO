@@ -50,10 +50,10 @@ void SystemClock_Config(void);
 /* USER CODE END EFP */
 
 /* Private defines -----------------------------------------------------------*/
-#define SENSOR_PWR_Pin GPIO_PIN_8
-#define SENSOR_PWR_GPIO_Port GPIOA
 #define LED_STATUS_Pin GPIO_PIN_0
 #define LED_STATUS_GPIO_Port GPIOB
+#define SENSOR_PWR_Pin GPIO_PIN_8
+#define SENSOR_PWR_GPIO_Port GPIOA
 
 /* USER CODE BEGIN Private defines */
 

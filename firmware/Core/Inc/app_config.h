@@ -14,7 +14,10 @@
 #define CFG_SENSOR_CONFIRM_MS        1500U  /* 連続開始後の初回データ確認窓 */
 #define CFG_STOP_CONFIRM_MS          1800U  /* 連続停止後もデータが続く場合の再トグル猶予 */
 #define CFG_SENSOR_RETRY_MAX         3U
-#define CFG_IDLE_TO_SLEEP_MS         10000U /* IDLE→自動Sleep */
+/* IDLE→自動Sleep。注: 現行HWはSTOP2からBLE(UART4)で復帰できない
+ * (Wake源はUSART2のみ)ため、実機BLEテスト/デモ中は長めに設定する。
+ * 量産向けに短縮する場合はUART4のStopモードWake対応が先。 */
+#define CFG_IDLE_TO_SLEEP_MS         600000U /* 10分 (テスト/デモ用) */
 #define CFG_BLE_INACTIVITY_MS        60000U /* 測定中の無通信→自動停止 */
 #define CFG_ERROR_TO_SLEEP_MS        60000U /* ERROR滞在の上限→省電力Sleepへ */
 #ifdef HYDROPAW_SIM_SENSOR

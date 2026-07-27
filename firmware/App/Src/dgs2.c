@@ -96,17 +96,16 @@ app_err_t dgs2_parse_line(const char *line, dgs2_sample_t *out)
         return E_SENSOR_PARSE;
     }
 
-    /* SN: 12桁の英数字のみ許可 */
-    if (len[0] != DGS2_SN_LEN) {
-        return E_SENSOR_PARSE;
+    /* SN: 本来は12桁英数字だが、EEPROM未書込みロット等でSNフィールドが
+     * 化けた値(非英数字/桁数違い)になる実機個体が存在する(2026-07実機確認)。
+     * SNは識別情報にすぎないため、パース失敗にはせず英数字以外を'?'へ
+     * 置換して受け入れる。測定行の判定は7フィールド構成+数値検証が担う。 */
+    size_t sn_n = (len[0] > DGS2_SN_LEN) ? DGS2_SN_LEN : len[0];
+    for (size_t i = 0; i < sn_n; i++) {
+        char c = tok[0][i];
+        out->sn[i] = isalnum((unsigned char)c) ? c : '?';
     }
-    for (size_t i = 0; i < len[0]; i++) {
-        if (!isalnum((unsigned char)tok[0][i])) {
-            return E_SENSOR_PARSE;
-        }
-    }
-    memcpy(out->sn, tok[0], len[0]);
-    out->sn[len[0]] = '\0';
+    out->sn[sn_n] = '\0';
 
     long ppb, temp_x100, rh_x100;
     if (!parse_long(tok[1], len[1], &ppb) ||

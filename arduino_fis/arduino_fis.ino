@@ -18,6 +18,20 @@
 #include "bap_lite.h"
 #include "hpp.h"
 
+#if FIS_SIM_SENSOR
+/* 合成呼気カーブ(センサ無しデモ用)。清浄大気Rs≈50kΩ→呼気でRs降下→回復 を繰り返す。 */
+static float sim_rs() {
+  static uint32_t n = 0;
+  static const float BR[] = {43000,38000,33000,30000,29000,29000,29500,30000,
+                             33000,38000,44000,48000,49500,50000};
+  const uint32_t BASE_N = 40;                       /* 呼気前の静穏サンプル数 */
+  const uint32_t CYCLE  = BASE_N + (sizeof(BR)/sizeof(BR[0]));
+  uint32_t k = (n++) % CYCLE;
+  if (k < BASE_N) return 50000.0f + ((k & 1u) ? 300.0f : -300.0f); /* 静穏 */
+  return BR[k - BASE_N];                             /* 呼気 */
+}
+#endif
+
 /* ---- BLE (Nordic UART Service) ---- */
 BLEService        nus(NUS_SERVICE_UUID);
 BLECharacteristic txChar(NUS_TX_UUID, BLENotify, 20);                 /* FW→App */
@@ -124,7 +138,7 @@ void setup() {
   BLE.advertise();
 
   hpp_decoder_init(&g_rx);
-  arm_session(false);                    /* 起動直後は予熱待ち */
+  arm_session(FIS_SIM_SENSOR ? true : false); /* SIM時は予熱スキップ */
   Serial.println("Fuwan-R4 (FIS SB-19) boot / advertising");
 }
 
@@ -149,9 +163,14 @@ void loop() {
     g_last_sample = now;
     if (!g_armed) continue;
 
+#if FIS_SIM_SENSOR
+    float rs = sim_rs();
+    bool  valid = true;                  /* 合成値は常に有効 */
+#else
     uint16_t adc = analogRead(PIN_VS_ADC);
     float rs = sb19_rs_ohm(adc);
     bool  valid = sb19_rs_valid(rs);
+#endif
 
     bapl_evt_t ev = bapl_on_sample(&g_bap, rs, valid, now);
     float rr = bapl_response(&g_bap);

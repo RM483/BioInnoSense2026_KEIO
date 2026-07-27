@@ -440,8 +440,8 @@ int main(void)
                 if (*c == ',') cols++;
             }
             dgs2_sample_t dbg;
-            LOG("DGS2 rx cols=%d parse=%s", cols,
-                dgs2_parse_line(line, &dbg) == APP_OK ? "OK" : "FAIL");
+            LOG("DGS2 rx cols=%d parse=%s [%s]", cols,
+                dgs2_parse_line(line, &dbg) == APP_OK ? "OK" : "FAIL", line);
 #endif
             sm_on_sensor_line(&g_sm, line, now);
         }
