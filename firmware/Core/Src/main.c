@@ -496,6 +496,12 @@ int main(void)
     sim_tick(now);
 #endif
 
+#ifdef HYDROPAW_SIM_SENSOR
+    /* 擬似センサ: 合成サンプルを実経路(sm_on_sensor_line/sm_on_frame)へ供給。
+     * DGS2到着前の実機エンドツーエンド検証用。通常FWでは無効。 */
+    sim_tick(now);
+#endif
+
     sm_tick(&g_sm, now);
     HAL_IWDG_Refresh(&hiwdg);
 
