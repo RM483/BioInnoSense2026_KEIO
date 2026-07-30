@@ -14,8 +14,8 @@ UIは `DataProvider` インターフェースのみに依存する。
 
 | Provider | 用途 | 起動方法 |
 |---|---|---|
-| `MockProvider` | 開発(既定)。FWの挙動を模した1Hzデータを生成 | `npm run dev` |
-| `BleProvider` | 実機。Web Bluetooth + HPP (Chrome系のみ) | `VITE_PROVIDER=ble npm run dev` |
+| `BleProvider` | 実機(既定)。Web Bluetooth + HPP (Chrome系のみ) | `npm run dev` |
+| `MockProvider` | デモ/開発(実機なし)。FWの挙動を模した1Hzデータを生成 | `VITE_PROVIDER=mock npm run dev` |
 
 切替は `src/providers/index.ts` の1箇所。`BleProvider` は
 `docs/03_ble_spec.md` のHPPプロトコル(TS実装: `src/providers/hpp.ts`,
