@@ -4,10 +4,14 @@
  *        ADC生値 → 分圧比 → センサ抵抗 Rs[Ω]。純関数(ハード非依存)なので
  *        ホストPCでも検証できる。ヒータ(VH=0.9V)は外部LT3080が常時供給する。
  *
- * 回路: VC — Rs — (VS節点) — RL — GND。電圧フォロワ+RCを介してVSをADCへ。
- *   VS = VC * RL/(Rs+RL)  ⇒  Rs = RL * (VC/VS - 1)
- *   ADC基準=VC(AVCC)なら ratio=adc/ADC_MAX=VS/VC で VC がキャンセル(電源変動補正)。
- *   Rs = RL * (1/ratio - 1)
+ * 回路(config.h の RL_HIGH_SIDE で切替):
+ *  [RL_HIGH_SIDE=1] 実機: VC — RL — (VS節点) — Rs — ≈VMID(ヒーター中点)。
+ *      VS = VMID + (VC−VMID)·Rs/(Rs+RL)
+ *      ⇒ Rs = RL·(ratio − VMID/VC)/(1 − ratio),  ratio = VS/VC
+ *      H2↑(Rs↓)で VS は下がる。
+ *  [RL_HIGH_SIDE=0] 旧図: VC — Rs — (VS節点) — RL — GND。
+ *      Rs = RL·(1/ratio − 1)。H2↑で VS は上がる。
+ * いずれも ADC基準=VC(AVCC) なら ratio=adc/ADC_MAX で VC がキャンセル(ratiometric)。
  * Rsは水素濃度の上昇とともに「減少」する(SB1900J ガス感度特性)。
  */
 #ifndef HP_SENSOR_SB19_H
@@ -25,15 +29,24 @@ static inline float sb19_ratio(uint16_t adc) {
     return r;
 }
 
-/** ADC生値からセンサ抵抗 Rs[Ω] を算出(ratiometric)。 */
+/** ADC生値からセンサ抵抗 Rs[Ω] を算出。 */
 static inline float sb19_rs_ohm(uint16_t adc) {
 #if USE_RATIOMETRIC
     float ratio = sb19_ratio(adc);
-    return RL_OHM * (1.0f / ratio - 1.0f);
 #else
     float vs = (float)adc / ADC_MAX * VC_VOLT;
-    if (vs < 0.001f) vs = 0.001f;
-    return RL_OHM * (VC_VOLT / vs - 1.0f);
+    float ratio = vs / VC_VOLT;
+    if (ratio < 0.0005f) ratio = 0.0005f;
+    if (ratio > 0.9995f) ratio = 0.9995f;
+#endif
+#if RL_HIGH_SIDE
+    /* 実機: RLが5V側。Rs = RL·(ratio − vm)/(1 − ratio), vm=VMID/VC */
+    float num = ratio - (VMID_VOLT / VC_VOLT);
+    if (num < 0.0005f) num = 0.0005f;    /* Rs→0 側クランプ */
+    return RL_OHM * num / (1.0f - ratio);
+#else
+    /* 旧図: Rsが5V側。 */
+    return RL_OHM * (1.0f / ratio - 1.0f);
 #endif
 }
 
