@@ -513,6 +513,10 @@ int main(void)
         if (logged_state == SM_SENSOR_INIT) {
             if (g_sm.state == SM_IDLE) {
                 LOG("sensor init OK sn=%s", g_sm.sensor_sn);
+                /* 素性確認: EEPROMダンプ('e')を要求。応答行は非CSVのため
+                 * 状態機械はparse失敗として無視し、デバッグログにのみ
+                 * 生テキストが流れる(ガス種・感度・工場較正値の確認用)。 */
+                dgs2_cmd_eeprom(&g_sensor);
             } else if (g_sm.state == SM_ERROR) {
                 LOG("sensor init FAILED (no response)");
             }
