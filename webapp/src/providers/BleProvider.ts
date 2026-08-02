@@ -73,6 +73,10 @@ export class BleProvider implements DataProvider {
         const dv = (e.target as BluetoothRemoteGATTCharacteristic).value
         if (dv) this.onChunk(new Uint8Array(dv.buffer))
       })
+      console.warn(
+        '[FIS変種] 表示中の"ppm"は未較正の相対H2指標です(指標1=表示1ppm)。' +
+          '実ppmへの換算はα較正後にFW側で実施予定(ppm化ロードマップ ステージ3)。',
+      )
       this.notifyConn('connected')
     } catch (e) {
       this.notifyConn('disconnected')
@@ -170,7 +174,14 @@ export class BleProvider implements DataProvider {
           this.sampleListeners.forEach((cb) =>
             cb({
               timestamp: new Date().toISOString(),
-              hydrogen_ppb: d.h2Ppb,
+              // ★★ 未較正の相対指標(実ppmではない) ★★
+              // FIS版FWがppb欄で送るのは (r-1)*1000 の相対H2指標
+              // (r = ベースラインRs ÷ 現在Rs。呼気で~170程度)。
+              // 本家UIのppb→ppm表示(÷1000)に合わせるため1000倍し、
+              // 「指標1 = 表示1ppm」として見せている。
+              // 本物のppm化はα較正後にFW側で実施(ppm化ロードマップ
+              // ステージ3)。そのときこの *1000 は削除すること。
+              hydrogen_ppb: d.h2Ppb * 1000,
               temperature: d.tempC,
               humidity: d.rh,
               battery: this.batteryPercent(),
