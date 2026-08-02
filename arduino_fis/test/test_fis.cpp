@@ -31,6 +31,32 @@ int main() {
   size_t fn = hpp_encode(HPP_EVT_PHASE, 7, (const uint8_t[]){1,0}, 2, frame);
   CHECK(fn == 9 && frame[0]==0xA5 && frame[1]==0x01 && frame[2]==0x87, "HPP encode ヘッダ整合");
 
+#if RL_HIGH_SIDE
+  /* ---- 1.5) 分圧変換 (RL_HIGH_SIDE=1: 実機の向き) ----
+   * 順方向モデル ratio = vm + (1-vm)·Rs/(Rs+RL) でADC値を合成し、
+   * sb19_rs_ohm() が元の Rs を復元できること、および
+   * VS低下(=H2上昇)で Rs が小さく算出される「向き」を確認する。 */
+  {
+    const float vm = VMID_VOLT / VC_VOLT;
+    const float rs_true[] = {1000.0f, 5000.0f, 17000.0f, 50000.0f};
+    for (float rt : rs_true) {
+      float ratio = vm + (1.0f - vm) * rt / (rt + RL_OHM);
+      uint16_t adc = (uint16_t)(ratio * ADC_MAX + 0.5f);
+      float rc = sb19_rs_ohm(adc);
+      char msg[80];
+      snprintf(msg, sizeof msg, "Rs復元 %.0fΩ → %.0fΩ (誤差<2%%)", rt, rc);
+      CHECK(fabsf(rc - rt) / rt < 0.02f, msg);
+    }
+    CHECK(sb19_rs_ohm(8000) < sb19_rs_ohm(12000),
+          "VS低下(H2上昇)で Rs が減少する向き (RL_HIGH_SIDE)");
+    /* 実測点の妥当性: クリーンエア VS/VC=3.11/4.68 → Rs ≈ 17kΩ 台 */
+    uint16_t adc_meas = (uint16_t)(3.11f / 4.68f * ADC_MAX);
+    float rs_meas = sb19_rs_ohm(adc_meas);
+    printf("実測点 check: ratio=0.664 → Rs=%.0fΩ\n", rs_meas);
+    CHECK(rs_meas > 15000.0f && rs_meas < 20000.0f, "実測クリーンエア点が15k-20kΩに入る");
+  }
+#endif /* RL_HIGH_SIDE */
+
   /* ---- 2) 合成呼気カーブ ---- */
   bapl_t b; uint32_t now = 1000;
   bapl_init(&b, 1, now, /*already_warm=*/true);
