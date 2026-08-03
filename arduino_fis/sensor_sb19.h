@@ -19,6 +19,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
+#include <math.h>
 #include "config.h"
 
 /** ADC生値(0..ADC_MAX)から比率(VS/VC)を返す。0/1近傍はクランプ。 */
@@ -54,5 +55,17 @@ static inline float sb19_rs_ohm(uint16_t adc) {
 static inline bool sb19_rs_valid(float rs) {
     return (rs >= RS_MIN_OHM) && (rs <= RS_MAX_OHM);
 }
+
+#if SB19_PPM_ENABLE
+/** Rs[Ω] → 水素濃度[ppm]。
+ *  データシート(SB1900J)の「両対数で直線」モデルに基づく:
+ *      C = 100 × (Rs / Rs100)^(−1/α)
+ *  精度は config.h の SB19_RS100_OHM / SB19_ALPHA に依存する。
+ *  典型値仮置き(PROVISIONAL)の間は±数倍の目安値であることに注意。 */
+static inline float sb19_ppm(float rs) {
+    if (rs < 1.0f) rs = 1.0f;   /* powfの発散防止 */
+    return 100.0f * powf(rs / SB19_RS100_OHM, -1.0f / SB19_ALPHA);
+}
+#endif
 
 #endif /* HP_SENSOR_SB19_H */

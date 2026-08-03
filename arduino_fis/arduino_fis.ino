@@ -76,14 +76,22 @@ static void send_data(int32_t h2_index, uint8_t flags) {
   p[12] = flags;
   send_hpp(HPP_EVT_DATA, p, sizeof(p));
 }
-/* EVT_RESULT(30B): STM32版と同レイアウト。ppb系は相対指標にマップ。 */
+/* EVT_RESULT(30B): STM32版と同レイアウト。
+ * SB19_PPM_ENABLE=1: ppb系フィールドに暫定ppm換算値(ppb単位)を入れる。
+ * =0: 従来通り相対指標。 */
 static void send_result(const bapl_result_t *r) {
   uint8_t p[30];
+#if SB19_PPM_ENABLE
+  int32_t base_ppb = (int32_t)(sb19_ppm(r->r0_ohm) * 1000.0f);
+  int32_t peak_idx = (int32_t)(sb19_ppm(r->rs_min_ohm) * 1000.0f);
+#else
+  int32_t base_ppb = 0;                                    /* baseline(相対) */
   int32_t peak_idx = (int32_t)((r->peak_r - 1.0f) * 1000.0f);
+#endif
   uint32_t auc_i   = (uint32_t)(r->auc * 1000.0f);
   p[0] = r->session_id; p[1] = r->quality; p[2] = r->confidence; p[3] = r->flags;
-  hpp_put_i32(&p[4], 0);            /* baseline(相対) = 0 */
-  hpp_put_i32(&p[8], peak_idx);     /* peak(相対H2指標) */
+  hpp_put_i32(&p[4], base_ppb);     /* baseline */
+  hpp_put_i32(&p[8], peak_idx);     /* peak */
   hpp_put_i32(&p[12], peak_idx);    /* plateau ≒ peak */
   hpp_put_u32(&p[16], auc_i);
   hpp_put_u16(&p[20], r->rise_ds);
@@ -174,8 +182,26 @@ void loop() {
 
     bapl_evt_t ev = bapl_on_sample(&g_bap, rs, valid, now);
     float rr = bapl_response(&g_bap);
-    int32_t h2_index = (int32_t)((rr - 1.0f) * 1000.0f);
+#if SB19_PPM_ENABLE
+    /* 暫定ppm(データシート典型値較正)をppb単位で送信。
+     * アプリは÷1000してppm表示するため、×1000はppm→ppbの正当な単位換算。 */
+    int32_t h2_index = (int32_t)(sb19_ppm(rs) * 1000.0f);
+#else
+    int32_t h2_index = (int32_t)((rr - 1.0f) * 1000.0f);  /* 相対指標(旧動作) */
+#endif
     if (h2_index < 0) h2_index = 0;
+
+    /* claudeの指示による追加。Rs/r/ppmを表示するための一時コード*/
+    static uint32_t dbg_t = 0;
+    if (now - dbg_t >= 1000) {
+      dbg_t = now;
+      Serial.print("Rs="); Serial.print(rs, 0);
+      Serial.print(" ohm  r="); Serial.print(rr, 3);
+#if SB19_PPM_ENABLE
+      Serial.print("  ppm="); Serial.print(sb19_ppm(rs), 1);
+#endif
+      Serial.println();
+    }
 
     switch (ev) {
       case BAPL_EVT_READY:  send_phase(HPP_PHASE_READY, 0);  break;

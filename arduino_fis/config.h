@@ -39,6 +39,18 @@
 /* Rs下端の電位 ≒ ヒーター中点 ≈ VH/2 ≈ 0.45V。0.0f で補正無効(粗い近似でも
  * BAPは相対値 r=R0/Rs を使うため実害は小さい)。 */
 #define VMID_VOLT         0.45f
+
+/* --- 暫定ppm換算 (ルートA: データシート典型値による仮較正) ---
+ * 換算式: C[ppm] = 100 × (Rs / SB19_RS100_OHM)^(−1/SB19_ALPHA)
+ * 根拠: SB1900Jデータシート C.感度特性
+ *   ・α = log(Rs@1000ppm/Rs@100ppm)/log(10)、仕様範囲 0.6〜1.2
+ *   ・Rs@100ppm 仕様範囲 0.2k〜2kΩ
+ * ★★下の2値は仕様範囲の中央を仮置きしたPROVISIONAL値★★
+ *   個体差が最大10倍あるため誤差±数倍。実験A(較正実験プロトコル)の
+ *   log-logフィットで得た実測値に必ず置き換えること。 */
+#define SB19_PPM_ENABLE   1        /* 1: ppm換算で送信 / 0: 相対指標(旧動作) */
+#define SB19_RS100_OHM    1000.0f  /* PROVISIONAL → 実験Aの実測値に置換 */
+#define SB19_ALPHA        0.9f     /* PROVISIONAL → 実験Aの実測値に置換 */
 /* SB-19 Rs 妥当レンジ(健全性判定用): 100ppm H2で0.2〜2kΩ。
  * 清浄大気〜低濃度まで含めて広めに許容する。 */
 #define RS_MIN_OHM        50.0f
@@ -52,7 +64,7 @@
  * 1: FISセンサ/読み出し回路が無くても合成Rsカーブを流し、R4単体で
  *    解析→HPP→BLE→アプリ の全経路を確認できる(STM32版simと同じ発想)。
  * 実機のFISセンサで測定する時は 0 に戻すこと。 */
-#define FIS_SIM_SENSOR    1
+#define FIS_SIM_SENSOR    0
 
 /* ---------- BAP-lite しきい値 (PROVISIONAL: 実犬較正前) ----------
  * 信号は response r = R0/Rs (清浄大気で ~1.0、H2上昇でRs減→r増)。 */
