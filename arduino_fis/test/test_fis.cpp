@@ -57,6 +57,20 @@ int main() {
   }
 #endif /* RL_HIGH_SIDE */
 
+#if SB19_PPM_ENABLE
+  /* ---- 1.6) 暫定ppm換算 (データシート典型値モデル) ---- */
+  {
+    float p100 = sb19_ppm(SB19_RS100_OHM);
+    CHECK(fabsf(p100 - 100.0f) < 1.0f, "Rs=Rs100 のとき 100ppm");
+    float rs500 = SB19_RS100_OHM * powf(5.0f, -SB19_ALPHA); /* 500ppm相当のRs */
+    float c500 = sb19_ppm(rs500);
+    CHECK(fabsf(c500 - 500.0f) / 500.0f < 0.02f, "500ppm相当Rsから500ppmを復元");
+    CHECK(sb19_ppm(5000.0f) < sb19_ppm(500.0f), "Rsが大きいほどppmが小さい(単調性)");
+    printf("ppm換算 check: Rs=17kΩ(クリーンエア実測) → %.1f ppm相当\n",
+           sb19_ppm(17000.0f));
+  }
+#endif /* SB19_PPM_ENABLE */
+
   /* ---- 2) 合成呼気カーブ ---- */
   bapl_t b; uint32_t now = 1000;
   bapl_init(&b, 1, now, /*already_warm=*/true);
