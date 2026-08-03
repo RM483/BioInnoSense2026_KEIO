@@ -74,8 +74,9 @@ export class BleProvider implements DataProvider {
         if (dv) this.onChunk(new Uint8Array(dv.buffer))
       })
       console.warn(
-        '[FIS変種] 表示中の"ppm"は未較正の相対H2指標です(指標1=表示1ppm)。' +
-          '実ppmへの換算はα較正後にFW側で実施予定(ppm化ロードマップ ステージ3)。',
+        '[FIS変種] 表示中のppmはデータシート典型値による暫定較正値です' +
+          '(誤差±数倍の目安値)。実験Aの実測値(Rs100, α)をFWのconfig.hに' +
+          '反映すると本較正になります。',
       )
       this.notifyConn('connected')
     } catch (e) {
@@ -174,14 +175,13 @@ export class BleProvider implements DataProvider {
           this.sampleListeners.forEach((cb) =>
             cb({
               timestamp: new Date().toISOString(),
-              // ★★ 未較正の相対指標(実ppmではない) ★★
-              // FIS版FWがppb欄で送るのは (r-1)*1000 の相対H2指標
-              // (r = ベースラインRs ÷ 現在Rs。呼気で~170程度)。
-              // 本家UIのppb→ppm表示(÷1000)に合わせるため1000倍し、
-              // 「指標1 = 表示1ppm」として見せている。
-              // 本物のppm化はα較正後にFW側で実施(ppm化ロードマップ
-              // ステージ3)。そのときこの *1000 は削除すること。
-              hydrogen_ppb: d.h2Ppb * 1000,
+              // FIS版FW(SB19_PPM_ENABLE=1)はデータシート典型値による
+              // 暫定ppm換算値をppb単位で送信する。ここでの追加変換は不要
+              // (UIが÷1000してppm表示)。
+              // ★較正状態はFW側 config.h の SB19_RS100_OHM / SB19_ALPHA に
+              //   依存。典型値仮置き(PROVISIONAL)の間は±数倍の目安値。
+              //   実験Aの実測値で置き換えると本較正になる。
+              hydrogen_ppb: d.h2Ppb,
               temperature: d.tempC,
               humidity: d.rh,
               battery: this.batteryPercent(),
